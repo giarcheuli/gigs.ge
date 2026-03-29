@@ -1,6 +1,6 @@
 # gigs.ge — System Design Document
 
-> **Status:** Draft v0.1 — living document, work all details out here before building anything.
+> **Status:** Draft v0.2 — open questions resolved; ready for implementation planning.
 
 ---
 
@@ -16,7 +16,7 @@
 4. [Registration & Verification Flow](#4-registration--verification-flow)
 5. [Job (Gig) Lifecycle](#5-job-gig-lifecycle)
 6. [Visibility & Privacy Model](#6-visibility--privacy-model)
-7. [Notifications & Inbox](#7-notifications--inbox)
+7. [Notifications, Inbox & Messaging](#7-notifications-inbox--messaging)
 8. [User Profile](#8-user-profile)
 9. [Data Models](#9-data-models)
 10. [API Design](#10-api-design)
@@ -24,7 +24,7 @@
 12. [Tech-Stack Proposal](#12-tech-stack-proposal)
 13. [Infrastructure & Deployment](#13-infrastructure--deployment)
 14. [Security Considerations](#14-security-considerations)
-15. [Open Questions & Next Steps](#15-open-questions--next-steps)
+15. [Decisions Log & Next Steps](#15-decisions-log--next-steps)
 
 ---
 
@@ -45,9 +45,11 @@
 ### Non-Goals (v1)
 
 - Payment processing / escrow
-- Real-time chat (async notifications only)
+- Real-time chat (async in-app messaging only)
 - Company / business accounts
 - Rating or review system (deferred to v2)
+- Native mobile app — PWA only (deferred to v2)
+- Privacy Policy and Terms of Service pages (future deliverable)
 
 ---
 
@@ -107,23 +109,32 @@ A **user** becomes _verified_ only after both their email address **and** phone 
 |---|-----------|-------|
 | AV-1 | View full job listing | Governed by per-field visibility settings of the poster |
 | AV-2 | Post a gig | See §5 |
-| AV-3 | Apply for a gig | Sends APPLICATION/REQUEST to poster |
+| AV-3 | Apply for a gig | Sends APPLICATION/REQUEST (with optional attachments) to poster |
 | AV-4 | Manage own gigs | Edit, close, delete |
-| AV-5 | Inbox & notifications | See §7 |
+| AV-5 | Inbox, Sent & notifications | See §7 |
 | AV-6 | Accept / reject applicants | Leads to HANDSHAKE |
 | AV-7 | View applicant profile | After receiving an application |
+| AV-8 | Message any other user | Via in-app messaging (see §7) |
+| AV-9 | Flag a gig | Reports gig to Admin Inbox for review |
 
 ---
 
 ### 3.4 Admin
 
-| # | Capability |
-|---|-----------|
-| AD-1 | View all users and gigs |
-| AD-2 | Suspend / ban users |
-| AD-3 | Remove / hide gigs |
-| AD-4 | View reports |
-| AD-5 | Manage region / city taxonomy |
+> The admin panel is a **separate application** (separate deployment, separate route, separate auth session) but is structurally identical to the user-facing app.  It adds user-management screens on top of the same underlying API.
+
+| # | Capability | Notes |
+|---|-----------|-------|
+| AD-1 | View all registered users | Full user list with account details |
+| AD-2 | View any user's account | Same view the user sees of their own profile — **excludes** Inbox, Sent, and any message/communication folders |
+| AD-3 | Restrict a user | Limits posting / applying ability |
+| AD-4 | Block / suspend a user | Prevents login |
+| AD-5 | Delete specific account data | Can remove any individual piece of PII |
+| AD-6 | Mark account for deletion | System auto-deletes the account 1 year after the user's last access date |
+| AD-7 | View all gigs (full info) | Including hidden fields |
+| AD-8 | Hide / restore a gig | Moderation action |
+| AD-9 | Admin Inbox | Receives flag reports from users; can send and receive direct messages to/from any user |
+| AD-10 | Manage region / city taxonomy | Add / edit regions and cities |
 
 ---
 
@@ -168,6 +179,8 @@ email_verified AND phone_verified ──► user status = VERIFIED
 - Maximum **5 attempts** per code before generating a new one.
 - Link-based email verification is the primary flow; OTC fallback if links cannot be clicked.
 
+> **v1 PoC note:** SMS delivery is **stubbed** — the OTP code is returned directly in the API response (dev mode) or logged server-side so the team can test without a live SMS provider.  A real provider (Twilio Verify or a local Georgian carrier) will be wired up before production launch.
+
 ### 4.4 Age Restriction
 
 - Server-side enforcement: reject `date_of_birth` that yields age < 18.
@@ -181,8 +194,16 @@ email_verified AND phone_verified ──► user status = VERIFIED
 ```
 DRAFT ──► ACTIVE ──► CLOSED
                 └──► CANCELLED (by poster)
-                └──► EXPIRED   (TTL or manual admin action)
+                └──► EXPIRED   (poster-defined TTL or admin action)
 ```
+
+### 5.0 Expiry Policy
+
+- The poster **must** set an expiry date when creating a gig.
+- Maximum allowed expiry window: **30 days** from creation date.
+- When `expires_at` is reached the system automatically transitions status → `EXPIRED`.
+- The poster receives a `GIG_EXPIRED` notification (see §7).
+- Expired gigs are hidden from the board but remain readable by the poster and admin.
 
 ### 5.1 Gig Fields & Default Visibility
 
@@ -191,22 +212,24 @@ DRAFT ──► ACTIVE ──► CLOSED
 | Short description | ✅ | visible | ❌ | Max 160 chars; board card preview |
 | Long description | ✅ | visible | ❌ | Markdown or plain text |
 | Images | — | visible | ✅ | Max 10 images; thumbnail on board |
-| Price / compensation | — | visible | ✅ | See §5.2; UI nudge to keep visible |
+| Price — fixed or range | — | visible | ✅ | UI nudge to keep visible |
+| Price — negotiable | ✅ | visible | ❌ | **Always public, hardcoded; not configurable** |
 | Available dates (from / to) | — | visible | ✅ | |
 | Region | ✅ | visible | ❌ | Always shown on board card |
 | City | — | hidden | ✅ | |
 | Street address / location | — | hidden | ✅ | |
 | Contact info (from profile) | — | requestable | ✅ | UI strongly discourages making visible upfront |
+| Expiry date | — | visible | ❌ | Always shown to poster; shown to board as "Available until" |
 
 **"Requestable"** = the field is hidden by default; an applicant can explicitly request it, which creates an in-app notification to the poster who can then choose to share or deny.
 
 ### 5.2 Price / Compensation Options
 
-| Option | UI Label |
-|--------|----------|
-| Fixed price | "Fixed: ₾ ___" |
-| Price range | "Between ₾ ___ and ₾ ___" |
-| Negotiated on site | "Negotiable — discuss in person" |
+| Option | UI Label | Visibility |
+|--------|----------|-----------|
+| Fixed price | "Fixed: ₾ ___" | Configurable (visible by default) |
+| Price range | "Between ₾ ___ and ₾ ___" | Configurable (visible by default) |
+| Negotiated on site | "💬 Negotiable — discuss in person" | **Always visible; hardcoded** |
 
 UI copy on the posting form: *"Making your offer clear and attractive gets the job done faster."*
 
@@ -214,7 +237,7 @@ UI copy on the posting form: *"Making your offer clear and attractive gets the j
 
 ```
 Applicant clicks [APPLY]
-  └─► APPLICATION record created
+  └─► APPLICATION record created (optional: cover message + attachments)
   └─► Notification sent to poster (see §7)
 
 Poster reviews APPLICATION
@@ -225,6 +248,8 @@ After HANDSHAKE:
   - Poster's last name becomes visible to applicant (if profile permits)
   - Agreed price & dates confirmed
 ```
+
+**Application attachments:** Applicants may upload portfolio images or documents (PDF, JPG, PNG) alongside their application. Max 5 files, 10 MB each. Stored in the same object storage as gig images.
 
 ### 5.4 HANDSHAKE
 
@@ -270,7 +295,7 @@ A **HANDSHAKE** is a mutual agreement object linking:
 
 ---
 
-## 7. Notifications & Inbox
+## 7. Notifications, Inbox & Messaging
 
 ### 7.1 Notification Types
 
@@ -283,14 +308,39 @@ A **HANDSHAKE** is a mutual agreement object linking:
 | `INFO_REQUEST_GRANTED` | Poster grants info request | Applicant | `Contact info for "{gig_short_desc}" is now visible.` |
 | `HANDSHAKE_COMPLETED` | Both confirm | Both | `Handshake confirmed for "{gig_short_desc}"` |
 | `GIG_EXPIRED` | TTL reached | Poster | `Your gig "{gig_short_desc}" has expired.` |
+| `GIG_FLAGGED` | User flags a gig | Admin inbox | `{name} flagged gig "{gig_short_desc}" — [REVIEW]` |
+| `NEW_MESSAGE` | User or admin sends a direct message | Recipient | `New message from {name}` |
 
-### 7.2 Notification Delivery
+### 7.2 User Account Page — Inbox & Sent
 
-- **In-app inbox** (primary): bell icon with unread badge; list view in `/inbox`.
+Every registered user (including admin) has two communication folders accessible from their **User Account Page**:
+
+| Folder | Contents |
+|--------|---------|
+| **Inbox** | Received notifications + direct messages from other users or admin |
+| **Sent** | Direct messages sent by this user |
+
+- Notifications (system events) appear in **Inbox** only and are read-only.
+- Direct messages appear in both **Inbox** (received) and **Sent** (sent).
+- Unread items are indicated by a badge on the Inbox menu item.
+
+> **Admin privacy rule:** Admin can see all users' account data and gigs, but **cannot** access any user's Inbox, Sent folder, or any message content. The messaging feature is strictly user-to-user or admin-to-user (outbound only from admin's own Inbox).
+
+### 7.3 Direct Messaging
+
+- Any verified user can send a direct message to another verified user.
+- Admin can send direct messages to any user (e.g., warnings, moderation notices).
+- Users can send direct messages to admin (e.g., appeals, questions).
+- Messages are plain text only in v1; no rich formatting.
+- Messages are stored persistently; no auto-deletion.
+
+### 7.4 Notification Delivery
+
+- **In-app Inbox** (primary): bell icon with unread badge; list view in `/inbox`.
 - **Email** (secondary): optional, user can disable per notification type.
-- **Push notification** (PWA): optional in v1, deferred to v2 if too complex.
+- **Push notification** (PWA): deferred to v2.
 
-### 7.3 [SEE APPLICATION] Redirect
+### 7.5 [SEE APPLICATION] Redirect
 
 Clicking [SEE APPLICATION] opens the **applicant's profile page** (`/profile/{userId}`).  
 Profile visibility rules apply (see §8).
@@ -330,18 +380,22 @@ Full edit access to all own fields; preview mode to see how others see your prof
 ### 9.1 `users`
 
 ```sql
-id              UUID PRIMARY KEY DEFAULT gen_random_uuid()
-email           TEXT UNIQUE NOT NULL
-email_verified  BOOLEAN NOT NULL DEFAULT false
-phone           TEXT UNIQUE NOT NULL           -- E.164
-phone_verified  BOOLEAN NOT NULL DEFAULT false
-password_hash   TEXT NOT NULL
-date_of_birth   DATE NOT NULL
-role            TEXT NOT NULL DEFAULT 'user'   -- 'user' | 'admin'
-status          TEXT NOT NULL DEFAULT 'active' -- 'active' | 'suspended' | 'banned'
-created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
-updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+id                      UUID PRIMARY KEY DEFAULT gen_random_uuid()
+email                   TEXT UNIQUE NOT NULL
+email_verified          BOOLEAN NOT NULL DEFAULT false
+phone                   TEXT UNIQUE NOT NULL           -- E.164
+phone_verified          BOOLEAN NOT NULL DEFAULT false
+password_hash           TEXT NOT NULL
+date_of_birth           DATE NOT NULL
+role                    TEXT NOT NULL DEFAULT 'user'   -- 'user' | 'admin'
+status                  TEXT NOT NULL DEFAULT 'active' -- 'active' | 'restricted' | 'suspended' | 'banned'
+last_accessed_at        TIMESTAMPTZ                    -- updated on every authenticated request
+marked_for_deletion_at  TIMESTAMPTZ                    -- set by admin; account auto-deleted 1 year after last_accessed_at
+created_at              TIMESTAMPTZ NOT NULL DEFAULT now()
+updated_at              TIMESTAMPTZ NOT NULL DEFAULT now()
 ```
+
+**Account deletion rule:** When `marked_for_deletion_at` is set, a background job checks daily.  If `now() - last_accessed_at >= 1 year` the account and all its data are permanently deleted.  If the user logs in before that deadline, `marked_for_deletion_at` is cleared automatically.
 
 ### 9.2 `user_profiles`
 
@@ -387,6 +441,7 @@ available_from      DATE
 available_to        DATE
 status              TEXT NOT NULL DEFAULT 'active' -- 'draft'|'active'|'closed'|'cancelled'|'expired'
 -- per-field visibility toggles
+-- NOTE: when price_type = 'negotiable', vis_price is ignored and always treated as 'public'
 vis_images          TEXT NOT NULL DEFAULT 'verified'
 vis_price           TEXT NOT NULL DEFAULT 'public'
 vis_city            TEXT NOT NULL DEFAULT 'verified'
@@ -395,7 +450,7 @@ vis_contact         TEXT NOT NULL DEFAULT 'on_request'
 vis_dates           TEXT NOT NULL DEFAULT 'verified'
 created_at          TIMESTAMPTZ NOT NULL DEFAULT now()
 updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
-expires_at          TIMESTAMPTZ                  -- NULL = no expiry
+expires_at          TIMESTAMPTZ NOT NULL             -- required; max 30 days from created_at
 ```
 
 ### 9.4 `gig_images`
@@ -421,6 +476,20 @@ created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 UNIQUE (gig_id, applicant_id)
 ```
+
+### 9.5a `application_attachments`
+
+```sql
+id              UUID PRIMARY KEY DEFAULT gen_random_uuid()
+application_id  UUID NOT NULL REFERENCES applications(id) ON DELETE CASCADE
+url             TEXT NOT NULL               -- object storage URL
+filename        TEXT NOT NULL
+mime_type       TEXT NOT NULL               -- 'image/jpeg' | 'image/png' | 'application/pdf'
+size_bytes      INT  NOT NULL
+uploaded_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+```
+
+Max 5 attachments per application; max 10 MB each.
 
 ### 9.6 `handshakes`
 
@@ -491,6 +560,31 @@ resolved_at     TIMESTAMPTZ
 UNIQUE (gig_id, requester_id, field)
 ```
 
+### 9.11 `messages`
+
+```sql
+id              UUID PRIMARY KEY DEFAULT gen_random_uuid()
+sender_id       UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
+recipient_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
+body            TEXT NOT NULL
+read_at         TIMESTAMPTZ        -- NULL = unread
+created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+```
+
+### 9.12 `gig_flags`
+
+```sql
+id              UUID PRIMARY KEY DEFAULT gen_random_uuid()
+gig_id          UUID NOT NULL REFERENCES gigs(id) ON DELETE CASCADE
+reporter_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
+reason          TEXT NOT NULL      -- free-text or enum: 'spam'|'offensive'|'misleading'|'other'
+status          TEXT NOT NULL DEFAULT 'pending' -- 'pending'|'reviewed'|'dismissed'
+created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+reviewed_at     TIMESTAMPTZ
+reviewed_by     UUID REFERENCES users(id)
+UNIQUE (gig_id, reporter_id)       -- one flag per user per gig
+```
+
 ---
 
 ## 10. API Design
@@ -540,10 +634,12 @@ UNIQUE (gig_id, requester_id, field)
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| POST | `/gigs/:id/applications` | ✅ verified | Apply for gig |
+| POST | `/gigs/:id/applications` | ✅ verified | Apply for gig (with optional cover message) |
 | GET | `/gigs/:id/applications` | ✅ owner | List applications for own gig |
 | PATCH | `/gigs/:id/applications/:appId` | ✅ owner | Accept / decline application |
 | DELETE | `/gigs/:id/applications/:appId` | ✅ applicant | Withdraw application |
+| POST | `/gigs/:id/applications/:appId/attachments` | ✅ applicant | Upload attachment(s) |
+| DELETE | `/gigs/:id/applications/:appId/attachments/:attachId` | ✅ applicant | Remove attachment |
 | GET | `/users/me/applications` | ✅ | List own applications |
 
 ### 10.5 Handshakes
@@ -562,22 +658,44 @@ UNIQUE (gig_id, requester_id, field)
 | GET | `/gigs/:id/info-requests` | ✅ owner | List info requests for own gig |
 | PATCH | `/gigs/:id/info-requests/:reqId` | ✅ owner | Grant / deny info request |
 
-### 10.7 Notifications
+### 10.7 Notifications & Messages
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
 | GET | `/notifications` | ✅ | List notifications (paginated) |
 | PATCH | `/notifications/:id/read` | ✅ | Mark as read |
 | POST | `/notifications/read-all` | ✅ | Mark all as read |
+| GET | `/messages/inbox` | ✅ | List received direct messages |
+| GET | `/messages/sent` | ✅ | List sent direct messages |
+| POST | `/messages` | ✅ | Send a direct message to a user |
+| GET | `/messages/:id` | ✅ party | Get a single message |
+| PATCH | `/messages/:id/read` | ✅ recipient | Mark message as read |
 
-### 10.8 Admin
+### 10.7a Gig Flags
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| GET | `/admin/users` | ✅ admin | List all users |
-| PATCH | `/admin/users/:id` | ✅ admin | Suspend / ban / unban |
-| GET | `/admin/gigs` | ✅ admin | List all gigs |
-| PATCH | `/admin/gigs/:id` | ✅ admin | Hide / restore gig |
+| POST | `/gigs/:id/flags` | ✅ verified | Flag a gig |
+
+### 10.8 Admin
+
+> Admin API is served by the **same backend** but under `/admin/*` routes, protected by an `admin` role check.  The admin front-end is a **separate application** that consumes these routes.
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/admin/users` | ✅ admin | List all registered users |
+| GET | `/admin/users/:id` | ✅ admin | View user account (profile only — no inbox/messages) |
+| PATCH | `/admin/users/:id` | ✅ admin | Restrict / block / unblock user |
+| DELETE | `/admin/users/:id/data/:field` | ✅ admin | Delete a specific piece of user data (PII) |
+| POST | `/admin/users/:id/mark-deletion` | ✅ admin | Mark account for auto-deletion |
+| DELETE | `/admin/users/:id/mark-deletion` | ✅ admin | Unmark account for auto-deletion |
+| GET | `/admin/gigs` | ✅ admin | List all gigs (full info, all statuses) |
+| PATCH | `/admin/gigs/:id` | ✅ admin | Hide / restore / expire gig |
+| GET | `/admin/flags` | ✅ admin | List all gig flag reports |
+| PATCH | `/admin/flags/:id` | ✅ admin | Mark flag as reviewed / dismissed |
+| GET | `/admin/messages/inbox` | ✅ admin | Admin's own inbox |
+| GET | `/admin/messages/sent` | ✅ admin | Admin's own sent messages |
+| POST | `/admin/messages` | ✅ admin | Send direct message to a user |
 | GET | `/admin/regions` | ✅ admin | List regions |
 | POST | `/admin/regions` | ✅ admin | Add region |
 | GET | `/admin/cities` | ✅ admin | List cities |
@@ -588,6 +706,8 @@ UNIQUE (gig_id, requester_id, field)
 ## 11. UI/UX Screens & Flows
 
 ### 11.1 Screen Inventory
+
+**User-facing app**
 
 | Screen | Route | Access |
 |--------|-------|--------|
@@ -602,11 +722,26 @@ UNIQUE (gig_id, requester_id, field)
 | My Gigs | `/my-gigs` | Auth |
 | My Applications | `/my-applications` | Auth |
 | Inbox | `/inbox` | Auth |
+| Sent | `/sent` | Auth |
+| Message Thread | `/messages/:id` | Auth (party) |
 | My Profile (edit) | `/profile/me` | Auth |
 | User Profile (view) | `/profile/:id` | Auth verified |
 | Handshake Detail | `/handshakes/:id` | Party |
-| Admin Dashboard | `/admin` | Admin |
 | 404 | `*` | All |
+
+**Admin app** (separate deployment)
+
+| Screen | Route | Access |
+|--------|-------|--------|
+| Dashboard | `/` | Admin |
+| User List | `/users` | Admin |
+| User Detail | `/users/:id` | Admin |
+| All Gigs | `/gigs` | Admin |
+| Gig Detail (full) | `/gigs/:id` | Admin |
+| Flag Reports | `/flags` | Admin |
+| Admin Inbox | `/inbox` | Admin |
+| Admin Sent | `/sent` | Admin |
+| Regions & Cities | `/taxonomy` | Admin |
 
 ### 11.2 Board Card (Gig Preview)
 
@@ -657,20 +792,21 @@ Section 2 — Images
   [Upload images]            Max 10; toggle: 👁 Visible / 🔒 Request
 
 Section 3 — Compensation  ⚡ "Make this visible to get hired faster!"
-  ◉ Fixed price  ₾ [___]
-  ○ Price range  ₾ [___] to ₾ [___]
-  ○ Negotiable
-  Toggle: 👁 Visible / 🔒 Request
+  ◉ Fixed price  ₾ [___]       toggle: 👁 Visible / 🔒 Request
+  ○ Price range  ₾ [___] to ₾ [___]  toggle: 👁 Visible / 🔒 Request
+  ○ Negotiable   💬 "Discuss in person"  (always visible — no toggle)
 
 Section 4 — Location
   [Region *]   (always visible)
   [City]       Toggle: 👁 Visible / 🔒 Request
   [Address]    Toggle: 👁 Visible / 🔒 Request
 
-Section 5 — Dates
+Section 5 — Availability
   From [date picker]
   To   [date picker]
   Toggle: 👁 Visible / 🔒 Request
+
+  Expires on [date picker *]  (max 30 days from today; required)
 
 Section 6 — Contact info   🔒 "We recommend keeping contact info hidden"
   Pulled from your profile
@@ -679,7 +815,23 @@ Section 6 — Contact info   🔒 "We recommend keeping contact info hidden"
 [Preview] [Post Gig]
 ```
 
-### 11.5 Notification / Inbox Item
+### 11.5 Apply for Gig Form
+
+```
+┌─────────────────────────────────────────────────────┐
+│ Applying for: "Need help moving boxes"               │
+│                                                      │
+│ Cover message (optional)                             │
+│ [____________________________________]               │
+│                                                      │
+│ Attachments (optional — max 5, 10 MB each)           │
+│ [+ Add portfolio image or document (PDF/JPG/PNG)]    │
+│                                                      │
+│              [SEND APPLICATION]                      │
+└─────────────────────────────────────────────────────┘
+```
+
+### 11.6 Notification / Inbox Item
 
 ```
 ┌─────────────────────────────────────────────────────┐
@@ -689,6 +841,24 @@ Section 6 — Contact info   🔒 "We recommend keeping contact info hidden"
 ```
 
 [SEE APPLICATION] → `/profile/{applicantId}`
+
+### 11.7 Inbox & Sent Tabs
+
+```
+Account Page
+  ┌─────────────────┐
+  │  [Inbox] [Sent] │
+  └─────────────────┘
+  Inbox:
+  ┌──────────────────────────────────────────────────┐
+  │ 🔔 Giorgi G. applied for "Moving help"  2m ago  │
+  │ 💬 Admin: "Your account has been noted"  1d ago  │
+  └──────────────────────────────────────────────────┘
+  Sent:
+  ┌──────────────────────────────────────────────────┐
+  │ → To: Admin — "I'd like to appeal..."   3d ago   │
+  └──────────────────────────────────────────────────┘
+```
 
 ---
 
@@ -706,7 +876,9 @@ Section 6 — Contact info   🔒 "We recommend keeping contact info hidden"
 | State / data | TanStack Query | Server state, caching |
 | Forms | React Hook Form + Zod | Validation mirrors server schema |
 | Maps / Geolocation | Browser Geolocation API + Nominatim | Pre-fill region/city; free tier |
-| Internationalisation | next-intl | Georgian (ka) + English (en) |
+| Internationalisation | next-intl | **English only in v1**; architecture supports adding Georgian (ka) and other locales in v2 without structural changes |
+
+> **Admin app:** Separate Next.js application sharing the same component library and design tokens.  Deployed to a separate domain (e.g., `admin.gigs.ge`).
 
 ### 12.2 Backend
 
@@ -720,8 +892,8 @@ Section 6 — Contact info   🔒 "We recommend keeping contact info hidden"
 | Auth | JWT (access) + httpOnly cookie (refresh) | |
 | File storage | **Cloudflare R2** (or S3-compatible) | Low egress cost |
 | Email | **Resend** (or AWS SES) | |
-| SMS / OTP | **Twilio Verify** | Georgian number support |
-| Queue | **BullMQ** (Redis-backed) | Async notification dispatch |
+| SMS / OTP | **Stubbed for v1 PoC** — code logged server-side / returned in dev API response; real provider (Twilio Verify or local Georgian carrier) wired before production | |
+| Queue | **BullMQ** (Redis-backed) | Async notification & message dispatch |
 
 ### 12.3 Infrastructure
 
@@ -790,33 +962,50 @@ Push / PR
 
 ---
 
-## 15. Open Questions & Next Steps
+## 15. Decisions Log & Next Steps
 
-### Open Questions
+### 15.1 Resolved Decisions
 
-| # | Question | Owner |
-|---|----------|-------|
-| OQ-1 | What is the retention / expiry policy for gigs? (e.g., auto-expire after 30 days?) | Product |
-| OQ-2 | Should applicants be able to attach files / portfolio images to their application? | Product |
-| OQ-3 | Georgian language (ka) as default or English? Both from day 1? | Product |
-| OQ-4 | Do we need a reporting / flagging mechanism (flag inappropriate gig)? | Product |
-| OQ-5 | Will the admin panel be a separate app or embedded in the main app under `/admin`? | Tech |
-| OQ-6 | SMS provider: Twilio vs local Georgian provider (Magti, Beeline, Silknet)? | Tech |
-| OQ-7 | What is the MVP launch timeline? | Product |
-| OQ-8 | Do we need a mobile app (React Native / Flutter) in addition to PWA? | Product |
-| OQ-9 | Privacy Policy and Terms of Service — needed before launch? | Legal |
-| OQ-10 | Should "Negotiated at site" price be configurable as hidden by default? | Product |
+All original open questions have been answered.  The table below is the canonical record.
 
-### Immediate Next Steps
+| # | Question | Decision |
+|---|----------|----------|
+| OQ-1 | Gig expiry / retention policy? | Poster-defined; **max 30 days** from creation. `expires_at` is required. System auto-expires at TTL. |
+| OQ-2 | Applicants attach portfolio files? | **Yes.** Max 5 files (PDF/JPG/PNG), 10 MB each, per application. |
+| OQ-3 | Language — Georgian + English from day 1? | **v1 English only.** Architecture is i18n-ready (next-intl); Georgian (ka) added in v2. |
+| OQ-4 | Flagging mechanism? | **Yes.** Flag reports are routed to **Admin Inbox**. All users have **Inbox** and **Sent** folders. Admin can message users; users can message admin. |
+| OQ-5 | Admin panel — embedded or separate app? | **Separate app** (separate Next.js deployment at `admin.gigs.ge`), structurally identical to user app, adds user list and moderation screens. |
+| OQ-5.1 | What can admin see / do on a user account? | Admin sees same profile view the user sees. **Admin cannot access user Inbox, Sent, or any messages.** Admin can: restrict, block, delete any PII field, mark for deletion (auto-deletes 1 year after last login). |
+| OQ-6 | SMS provider? | **Stubbed for PoC v1** — OTP code returned in API response (dev) or logged server-side. Real provider integrated before production. |
+| OQ-7 | MVP timeline? | **1 week.** |
+| OQ-8 | Native mobile app? | **No.** PWA only. Native app deferred indefinitely. |
+| OQ-9 | Privacy Policy / Terms of Service? | **Future deliverable.** Skip for v1. |
+| OQ-10 | "Negotiated at site" price — configurable visibility? | **No.** Always public, hardcoded. Visibility toggle shown only for fixed price and price-range options. |
 
-1. **Review & approve** this document — fill in answers to Open Questions.
-2. **Tech stack confirmation** — agree on backend / frontend choices.
-3. **Region / city data** — compile the Georgian administrative region + city list.
-4. **Wireframes** — lo-fi wireframes for Board, Gig Detail, Post Gig, Inbox.
-5. **Repository structure** — set up monorepo (`apps/web`, `apps/api`) or separate repos.
-6. **Database setup** — initial schema migration + seed data.
-7. **Auth slice** — implement registration, OTP verification, login as first vertical.
+### 15.2 Immediate Next Steps (1-week sprint)
+
+| Day | Deliverable |
+|-----|-------------|
+| 1 | Monorepo scaffold (`apps/web`, `apps/admin`, `apps/api`); Drizzle schema + first migration; seed regions/cities |
+| 1–2 | Auth slice: register, email OTC verify, phone OTP stub, login, refresh, logout |
+| 2–3 | Gigs board: list (public, limited view) + gig detail (visibility rules) |
+| 3–4 | Post Gig form + expiry date picker; gig management (edit / close) |
+| 4–5 | Applications: apply (with attachment upload), accept/decline, handshake |
+| 5–6 | Inbox + Sent; direct messaging; flag-gig → admin inbox |
+| 6–7 | Admin app: user list, user detail, gig list, flag review, messaging |
+| 7 | End-to-end smoke test; deploy to staging |
+
+### 15.3 Future Deliverables (v2+)
+
+- Privacy Policy and Terms of Service pages
+- Georgian language (ka) localisation
+- Real SMS provider integration (Twilio or Georgian carrier)
+- Push notifications (PWA service worker)
+- Rating / review system
+- Real-time messaging (WebSockets or SSE)
+- Native mobile app (React Native / Flutter)
+- Payment / escrow integration
 
 ---
 
-*Last updated: 2026-03-29 — draft v0.1*
+*Last updated: 2026-03-29 — draft v0.2*
