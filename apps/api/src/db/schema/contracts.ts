@@ -6,9 +6,7 @@ import {
   integer,
   boolean,
   timestamp,
-  check,
 } from 'drizzle-orm/pg-core';
-import { sql } from 'drizzle-orm';
 import { users } from './users.js';
 import { gigs } from './gigs.js';
 import { applications } from './applications.js';
@@ -27,8 +25,15 @@ export const contracts = pgTable('contracts', {
   posterSignedAt: timestamp('poster_signed_at', { withTimezone: true }),
   workerSignedAt: timestamp('worker_signed_at', { withTimezone: true }),
   feeEligible: boolean('fee_eligible').notNull().default(true),
+  completionMarkedBy: uuid('completion_marked_by').references(() => users.id),
+  completionMarkedAt: timestamp('completion_marked_at', { withTimezone: true }),
   completedAt: timestamp('completed_at', { withTimezone: true }),
   cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
+  disputedAt: timestamp('disputed_at', { withTimezone: true }),
+  quitAt: timestamp('quit_at', { withTimezone: true }),
+  arbiterDecision: text('arbiter_decision'), // 'favor_poster' | 'favor_worker' | 'dismiss'
+  arbiterNotes: text('arbiter_notes'),
+  arbiterDecidedAt: timestamp('arbiter_decided_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });

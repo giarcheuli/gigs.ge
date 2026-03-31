@@ -2,26 +2,10 @@ import { z } from 'zod';
 import {
   USER_ROLES,
   USER_STATUSES,
-  GIG_STATUSES,
   PRICE_TYPES,
-  APPLICATION_STATUSES,
-  CONTRACT_STATUSES,
-  APPENDIX_STATUSES,
   VISIBILITY_LEVELS,
-  OTP_CHANNELS,
-  REVIEW_STATUSES,
-  LEDGER_TYPES,
-  LEDGER_STATUSES,
-  INVOICE_STATUSES,
-  INFO_REQUEST_STATUSES,
-  FLAG_STATUSES,
   MAX_SHORT_DESCRIPTION_LENGTH,
   MAX_SHORT_BIO_LENGTH,
-  MAX_FILE_SIZE_BYTES,
-  MAX_APPLICATION_ATTACHMENTS,
-  MAX_GIG_IMAGES,
-  MAX_DISPUTE_EVIDENCE_FILES,
-  MAX_APPENDICES_PER_CONTRACT,
 } from '../constants/index.js';
 
 // ── Helpers ──
@@ -116,8 +100,6 @@ export const updateContractDraftSchema = z.object({
   agreedPrice: z.string().regex(/^\d+(\.\d{1,2})?$/).nullish(),
   agreedStartAt: isoDatetime.optional(),
   dueAt: isoDatetime.nullish(),
-  shortDescription: z.string().min(1).max(MAX_SHORT_DESCRIPTION_LENGTH).optional(),
-  longDescription: z.string().max(5000).nullish(),
 });
 
 export const rejectContractDraftSchema = z.object({

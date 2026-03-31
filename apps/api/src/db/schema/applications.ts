@@ -2,6 +2,7 @@ import {
   pgTable,
   uuid,
   text,
+  integer,
   timestamp,
   unique,
 } from 'drizzle-orm/pg-core';
@@ -27,6 +28,6 @@ export const applicationAttachments = pgTable('application_attachments', {
   url: text('url').notNull(),
   filename: text('filename').notNull(),
   mimeType: text('mime_type').notNull(),
-  sizeBytes: text('size_bytes').notNull(),
+  sizeBytes: integer('size_bytes').notNull(),
   uploadedAt: timestamp('uploaded_at', { withTimezone: true }).notNull().defaultNow(),
 });

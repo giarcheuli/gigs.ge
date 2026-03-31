@@ -6,6 +6,7 @@ import type {
   ApplicationStatus,
   ContractStatus,
   AppendixStatus,
+  ArbiterDecision,
   LedgerType,
   LedgerStatus,
   InvoiceStatus,
@@ -109,8 +110,15 @@ export interface Contract {
   posterSignedAt: string | null;
   workerSignedAt: string | null;
   feeEligible: boolean;
+  completionMarkedBy: string | null;
+  completionMarkedAt: string | null;
   completedAt: string | null;
   cancelledAt: string | null;
+  disputedAt: string | null;
+  quitAt: string | null;
+  arbiterDecision: ArbiterDecision | null;
+  arbiterNotes: string | null;
+  arbiterDecidedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }

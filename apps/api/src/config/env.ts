@@ -1,16 +1,24 @@
 import 'dotenv/config';
 
+const required = (key: string): string => {
+  const value = process.env[key];
+  if (!value) {
+    throw new Error(`Missing required environment variable: ${key}`);
+  }
+  return value;
+};
+
 export const env = {
   HOST: process.env.HOST ?? '0.0.0.0',
   PORT: Number(process.env.PORT ?? 3001),
   NODE_ENV: process.env.NODE_ENV ?? 'development',
   LOG_LEVEL: process.env.LOG_LEVEL ?? 'info',
 
-  DATABASE_URL: process.env.DATABASE_URL!,
+  DATABASE_URL: required('DATABASE_URL'),
   REDIS_URL: process.env.REDIS_URL ?? 'redis://localhost:6379',
 
-  JWT_ACCESS_SECRET: process.env.JWT_ACCESS_SECRET!,
-  JWT_REFRESH_SECRET: process.env.JWT_REFRESH_SECRET!,
+  JWT_ACCESS_SECRET: required('JWT_ACCESS_SECRET'),
+  JWT_REFRESH_SECRET: required('JWT_REFRESH_SECRET'),
   JWT_ACCESS_EXPIRES_IN: process.env.JWT_ACCESS_EXPIRES_IN ?? '15m',
   JWT_REFRESH_EXPIRES_IN: process.env.JWT_REFRESH_EXPIRES_IN ?? '7d',
 
