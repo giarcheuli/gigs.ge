@@ -1,277 +1,137 @@
-# First-UAT Readiness Handoff
+# UAT Readiness Handoff
 
-> **Purpose:** Define the minimum credible slice for the first User-Acceptance Test (UAT) based on what is *actually* implemented today. Nothing here is forward-dated or aspirational.
->
-> **Authored:** 2026-05-01  
-> **Owner:** Delivery orchestrator  
-> **Related:** [backlog.json](../backlog.json) · [auth-flow.md](../architecture/auth-flow.md) · [database-design.md](../architecture/database-design.md) · [SYSTEM_DESIGN.md](../../SYSTEM_DESIGN.md)
+> **Agent context:** Machine-readable summary of what is built, what must be built for UAT, and the exact acceptance gate for each session. No narrative. All facts, all tables.  
+> **Date:** 2026-05-01 · **Backlog:** [backlog.json](../backlog.json) · **Design:** [SYSTEM_DESIGN.md](../../SYSTEM_DESIGN.md)
 
 ---
 
-## 1. Honest Implementation Snapshot
+## Implementation State
 
-Before defining the UAT slice, here is the exact state of the repo today.
-
-### Done (truly usable code)
-
-| Area | What Exists |
-|------|-------------|
-| **Database schema** | All 19 Drizzle tables defined (`apps/api/src/db/schema/`). Full type coverage. |
-| **Shared package** | `packages/shared` — constants, TypeScript interfaces, Zod schemas for every domain. Build-safe. |
-| **Fastify app factory** | `apps/api/src/app.ts` — CORS, cookie, helmet, rate-limit, error handler, `/health` endpoint. No routes registered. |
-| **Geographic seed** | `apps/api/src/db/seed.ts` — 11 Georgian regions, ~44 cities. Idempotent. |
-| **Architecture docs** | `auth-flow.md`, `database-design.md`, `monorepo-structure.md`, `getting-started.md` |
-| **Web placeholder** | `apps/web` — Next.js app boots; renders a static heading. No pages. |
-| **Admin placeholder** | `apps/admin` — Next.js app boots; renders a static heading. No pages. |
-
-### Not Implemented (zero application code exists)
-
-| Area | Why It Blocks UAT |
-|------|------------------|
-| Auth API routes | Cannot register or log in |
-| OTP verification handlers | Cannot reach `verified` status → cannot post or apply |
-| Auth guards (`requireAuth`, `requireVerified`) | No access control on any route |
-| Geography API (`GET /regions`, `GET /cities`) | Gig creation form needs region list |
-| Gig API (CRUD + board listing) | Core entity — board can't be shown |
-| Application API | Workers can't apply; posters can't accept |
-| Contract API | Negotiation and signing can't happen |
-| Frontend pages | All pages beyond the placeholder are empty |
-| Admin panel pages | All pages beyond the placeholder are empty |
-| BullMQ workers / timers | Auto-complete, overdue reminders — not started |
-| File upload (R2) | Gig images and attachments — not started |
-| Notifications | No delivery; table exists but nothing writes to it |
-| Messaging | Table exists; no routes or handlers |
+| ✅ Done | ❌ Not started |
+|---------|---------------|
+| 19-table Drizzle schema (`apps/api/src/db/schema/`) | All API routes |
+| `packages/shared` — constants, types, Zod schemas | Auth guards (`requireAuth`, `requireVerified`, `requireAdmin`) |
+| Fastify factory — CORS, cookie, helmet, rate-limit, `/health` | Geography handlers |
+| Geographic seed — 11 regions, ~44 cities (idempotent) | Gig / Application / Contract handlers |
+| Architecture docs — `auth-flow`, `database-design`, `monorepo-structure` | Frontend pages (both apps boot, show static heading only) |
+| Web + Admin placeholders boot | BullMQ workers, R2 uploads, notification delivery, messaging |
 
 ---
 
-## 2. First-UAT Actor Journeys
+## UAT Scope: Two Journeys, Stop at `in_progress`
 
-The minimum UAT tests exactly two end-to-end journeys, stopping at **contract signed → in_progress**. Everything after that (completion, disputes, billing, reviews) is deferred.
+**Journey A — Poster:** visitor → register → verify (email + phone) → post gig → view applications → accept application → sign contract → `in_progress`
 
-### Journey A — Poster
+**Journey B — Worker:** visitor → register → verify → browse board → apply → receive accepted notification → view contract draft → sign → `in_progress`
 
-```
-1. Browse board as visitor → see gig cards (public fields only)
-2. Register (email, phone, date of birth)
-3. Verify email OTP → email_verified = true
-4. Verify phone OTP → phone_verified = true  [status now: verified]
-5. Post a gig (short description, region, price, expiry ≤ 30 days)
-6. View applications received on own gig
-7. Accept one application → contract draft auto-created
-8. Review and sign the contract draft
-9. Observe contract status = in_progress after worker also signs
-```
-
-### Journey B — Worker
-
-```
-1. Browse board as visitor → see gig cards (public fields only)
-2. Register → verify email + phone → status: verified
-3. Browse board as verified user → see additional fields per visibility rules
-4. Open a gig detail page
-5. Apply for the gig (optional message)
-6. Receive notification: application accepted
-7. View the contract draft the poster created
-8. Sign the contract draft
-9. Observe contract status = in_progress
-```
-
-### Scope Boundary
-
-These journeys are the **only** scope for first UAT. The following are **explicitly out of scope** for this UAT round:
-
-- Marking a contract complete / not done
-- Disputes and arbitration
-- Fee calculation and billing ledger
-- Monthly invoices
-- Reviews
-- Gig image uploads
-- Application file attachments
-- Gig flagging and info requests
-- Admin moderation tools
-- Messaging between users
-- Half-time rule enforcement
-- Automatic timers (48h auto-complete, 14-day overdue)
+**Explicitly out of scope:** contract completion, disputes, arbitration, billing, invoices, reviews, image uploads, file attachments, gig flagging, messaging, admin tools, half-time rule, BullMQ timers.
 
 ---
 
-## 3. Business Rules: Required vs. Deferrable
+## Business Rules Gate
 
-### Required before first UAT
-
-| Rule | Where enforced | Why it cannot wait |
-|------|---------------|-------------------|
-| Age ≥ 18 on registration | `POST /auth/register` handler | Legal requirement; trivial to implement |
-| Email + phone verification before post/apply | `requireVerified` guard | Core trust model; unverified users should never post |
-| One application per worker per gig | DB `UNIQUE(gig_id, applicant_id)` already exists; route must return `409` | Prevents duplicate spam |
-| Gig expiry ≤ 30 days from creation | `POST /gigs` handler | Board quality; prevents stale forever-gigs |
-| Visibility field filtering on board listing | `GET /gigs` handler | Privacy-first is a core product promise |
-| Both signatures → `in_progress` | `PATCH /contracts/:id/sign` handler | End of UAT journey depends on this |
-
-### Safe to defer past first UAT
-
-| Rule | Reason it can wait |
-|------|-------------------|
-| 48h auto-complete (BullMQ) | Requires queue infrastructure; can be manually tested later |
-| Half-time rule (mark complete/not done gate) | No completion flow in UAT scope |
-| 24h grace period (no fee on early cancel) | No billing in UAT scope |
-| 14-day overdue auto-complete | No overdue flow in UAT scope |
-| Fee calculation (3%/2%) | No contract completion in UAT scope |
-| Dispute resolution flow | Post-UAT |
-| Maximum 3 appendices per contract | Post-UAT |
-| SMS gateway (real provider) | OTP printed to console is sufficient for internal UAT |
-| File upload (R2 integration) | Images are a visual enhancement, not a flow blocker |
-| Notification delivery (email/push) | DB-write stubs are enough to test notification data model |
-| Admin arbiter tools | Not in UAT actor journeys |
+| Rule | Enforced at | UAT? |
+|------|------------|------|
+| Age ≥ 18 | `POST /auth/register` | ✅ required |
+| Email + phone verified before post/apply | `requireVerified` guard | ✅ required |
+| Duplicate apply → `409` | `POST /gigs/:id/applications` (DB UNIQUE already exists) | ✅ required |
+| Gig expiry ≤ 30 days | `POST /gigs` | ✅ required |
+| Visibility field filtering | `GET /gigs` + `GET /gigs/:id` | ✅ required |
+| Both signatures → `in_progress` | `POST /contracts/:id/sign` | ✅ required |
+| 48h auto-complete (BullMQ) | BullMQ worker | ⏳ post-UAT |
+| Half-time rule | `POST /contracts/:id/complete` | ⏳ post-UAT |
+| 24h grace period (fee waiver) | cancel handler | ⏳ post-UAT |
+| 14-day overdue auto-complete | BullMQ worker | ⏳ post-UAT |
+| Fee calculation 3%/2% | ledger write | ⏳ post-UAT |
+| Dispute / appendix flow | dispute handlers | ⏳ post-UAT |
+| Real SMS gateway | OTP handler | ⏳ post-UAT (console-log for UAT) |
+| R2 file upload | storage utility | ⏳ post-UAT |
+| Notification delivery (email/push) | notification worker | ⏳ post-UAT (DB-write stub sufficient) |
+| Admin arbiter tools | admin handlers | ⏳ post-UAT |
 
 ---
 
-## 4. Four-Session Implementation Brief
+## Session 1 — Auth API
 
-Sessions are ordered by dependency. Each must be complete (routes tested, no stubs for required rules) before the next session begins.
+| M | Path | Guard | Key constraint |
+|---|------|-------|----------------|
+| POST | `/api/v1/auth/register` | — | bcrypt cost=12; age ≥18; console-log OTP; `201` + refresh cookie |
+| POST | `/api/v1/auth/login` | — | `200` + `accessToken` + refresh cookie |
+| POST | `/api/v1/auth/refresh` | — | rotate token; new `accessToken` |
+| POST | `/api/v1/auth/verify/email` | requireAuth | `email_verified=true`; OTP from console |
+| POST | `/api/v1/auth/verify/phone` | requireAuth | `phone_verified=true`; OTP from console |
+| GET  | `/api/v1/auth/me` | requireAuth | current user + profile |
+| POST | `/api/v1/auth/logout` | requireAuth | invalidate refresh token |
 
----
+**Guards:** implement `requireAuth` (401 on miss), `requireVerified` (403 if not verified), `requireAdmin`.
 
-### Session 1 — Auth API
-
-**Deliverable:** A user can register, verify, and log in via the API.
-
-**Routes to implement:**
-
-| Method | Path | Guard | Notes |
-|--------|------|-------|-------|
-| `POST` | `/api/v1/auth/register` | — | Hash password (bcrypt cost=12); send email OTC to console; return 201 + set refresh cookie |
-| `POST` | `/api/v1/auth/login` | — | Return `accessToken` + set refresh cookie |
-| `POST` | `/api/v1/auth/refresh` | — | Rotate refresh token; return new `accessToken` |
-| `POST` | `/api/v1/auth/verify/email` | `requireAuth` | Mark `email_verified = true`; OTC from console |
-| `POST` | `/api/v1/auth/verify/phone` | `requireAuth` | Mark `phone_verified = true`; OTP logged to console |
-| `GET`  | `/api/v1/auth/me` | `requireAuth` | Return current user + profile |
-| `POST` | `/api/v1/auth/logout` | `requireAuth` | Invalidate refresh token |
-
-**Auth guards to implement:** `requireAuth`, `requireVerified`, `requireAdmin`
-
-**Acceptance criteria:**
-
-- `POST /auth/register` with valid body → `201`, user in DB, refresh cookie set
-- `POST /auth/register` with DOB yielding age < 18 → `400`
-- `POST /auth/register` with duplicate email → `409`
-- `POST /auth/login` with correct credentials → `200` with `accessToken`
-- `POST /auth/login` with wrong password → `401`
-- `POST /auth/refresh` with valid cookie → `200` with new `accessToken`, cookie rotated
-- `POST /auth/verify/email` with correct OTC → `email_verified = true` in DB
-- `POST /auth/verify/phone` with correct OTP → `phone_verified = true` in DB
-- Route protected by `requireVerified` returns `403` for unverified users
-- Route protected by `requireAuth` returns `401` for unauthenticated requests
+**Acceptance gate:** valid register→201+cookie · age<18→400 · dup email→409 · login ok→200+token · wrong pwd→401 · refresh ok→new token · verify email OTP ok→`email_verified=true` · verify phone OTP ok→`phone_verified=true` · unverified on guarded route→403 · unauthenticated on guarded route→401.
 
 ---
 
-### Session 2 — Geography + Gig API
+## Session 2 — Geography + Gig API *(needs Session 1)*
 
-**Deliverable:** The board can be browsed; verified users can post and manage gigs.
+| M | Path | Guard | Key constraint |
+|---|------|-------|----------------|
+| GET | `/api/v1/regions` | — | 11 Georgian regions |
+| GET | `/api/v1/regions/:id/cities` | — | cities for region |
+| GET | `/api/v1/gigs` | — | paginated; fields filtered by auth level |
+| GET | `/api/v1/gigs/:id` | — | visibility rules applied |
+| POST | `/api/v1/gigs` | requireVerified | `draft`; expiry ≤30 days enforced |
+| PATCH | `/api/v1/gigs/:id` | requireVerified + poster | update fields |
+| PATCH | `/api/v1/gigs/:id/publish` | requireVerified + poster | `draft→active` |
+| PATCH | `/api/v1/gigs/:id/cancel` | requireVerified + poster | `→cancelled` |
 
-**Routes to implement:**
-
-| Method | Path | Guard | Notes |
-|--------|------|-------|-------|
-| `GET` | `/api/v1/regions` | — | List all regions |
-| `GET` | `/api/v1/regions/:id/cities` | — | Cities for a region |
-| `GET` | `/api/v1/gigs` | — | Paginated board; fields filtered by caller's auth level |
-| `GET` | `/api/v1/gigs/:id` | — | Full gig; visibility rules applied |
-| `POST` | `/api/v1/gigs` | `requireVerified` | Create gig as `draft`; enforce expiry ≤ 30 days |
-| `PATCH` | `/api/v1/gigs/:id` | `requireVerified` + poster-only | Update gig fields |
-| `PATCH` | `/api/v1/gigs/:id/publish` | `requireVerified` + poster-only | Move `draft → active` |
-| `PATCH` | `/api/v1/gigs/:id/cancel` | `requireVerified` + poster-only | Move to `cancelled` |
-
-**Acceptance criteria:**
-
-- `GET /regions` → `200` with 11 Georgian regions
-- `GET /regions/1/cities` → `200` with cities for that region
-- `GET /gigs` (visitor) → public fields only; no `streetAddress`, no contact info
-- `GET /gigs` (verified) → fields per visibility defaults
-- `POST /gigs` without auth → `401`
-- `POST /gigs` with unverified user → `403`
-- `POST /gigs` with `expiresAt` > 30 days from now → `400`
-- `POST /gigs` valid → `201`, status = `draft`
-- `PATCH /gigs/:id/publish` → status = `active`
-- `PATCH /gigs/:id` by non-poster → `403`
+**Acceptance gate:** GET /regions→11 items · GET /cities→non-empty · GET /gigs visitor→no streetAddress/contact · GET /gigs verified→visibility fields present · POST no auth→401 · POST unverified→403 · POST expiresAt>30d→400 · POST valid→201 draft · publish→active · PATCH by non-poster→403.
 
 ---
 
-### Session 3 — Applications + Contracts API
+## Session 3 — Applications + Contracts API *(needs Session 2)*
 
-**Deliverable:** Worker can apply; poster can accept and create a contract; both parties can sign.
+| M | Path | Guard | Key constraint |
+|---|------|-------|----------------|
+| POST | `/api/v1/gigs/:id/applications` | requireVerified | unique per worker; 409 on dup |
+| GET | `/api/v1/gigs/:id/applications` | requireVerified + poster | list |
+| PATCH | `/api/v1/applications/:id` | requireVerified + poster | accept→contract draft created; reject→notified |
+| GET | `/api/v1/contracts/:id` | requireAuth + party | view draft |
+| PATCH | `/api/v1/contracts/:id` | requireAuth + poster | edit price/dates |
+| POST | `/api/v1/contracts/:id/sign` | requireAuth + party | both signed→`in_progress` |
+| POST | `/api/v1/contracts/:id/reject` | requireAuth + worker | draft reset; poster notified |
 
-**Routes to implement:**
-
-| Method | Path | Guard | Notes |
-|--------|------|-------|-------|
-| `POST` | `/api/v1/gigs/:id/applications` | `requireVerified` | Apply to active gig; enforce uniqueness → `409` on duplicate |
-| `GET` | `/api/v1/gigs/:id/applications` | `requireVerified` + poster-only | List applications |
-| `PATCH` | `/api/v1/applications/:id` | `requireVerified` + poster-only | Accept or reject; accepted triggers contract draft creation |
-| `GET` | `/api/v1/contracts/:id` | `requireAuth` + party-only | View contract |
-| `PATCH` | `/api/v1/contracts/:id` | `requireAuth` + poster-only | Edit draft (price, dates) |
-| `POST` | `/api/v1/contracts/:id/sign` | `requireAuth` + party-only | Record signature; when both signed → `in_progress` |
-| `POST` | `/api/v1/contracts/:id/reject` | `requireAuth` + worker-only | Worker rejects draft; poster notified |
-
-**Acceptance criteria:**
-
-- `POST /gigs/:id/applications` → `201` (status = `pending`)
-- Same worker applies twice to same gig → `409`
-- Worker applies to non-active gig → `400`
-- `PATCH /applications/:id {status: "accepted"}` by poster → `200`, worker notified (DB notification row), contract draft auto-created
-- `GET /contracts/:id` by poster → `200` with draft
-- `PATCH /contracts/:id` by poster updates price/dates
-- `POST /contracts/:id/sign` by poster → `poster_signed_at` set
-- `POST /contracts/:id/sign` by worker (after poster) → `worker_signed_at` set, status = `in_progress`
-- `POST /contracts/:id/sign` by uninvolved user → `403`
-- `POST /contracts/:id/reject` by worker → poster notified (DB row), draft reset for revision
+**Acceptance gate:** apply→201 pending · dup apply→409 · non-active gig→400 · accept→contract draft + DB notification row · GET contract by poster→200 draft · PATCH price ok · poster signs→`poster_signed_at` set · worker signs after poster→`in_progress` · third-party sign→403 · worker reject→poster notified, draft revised.
 
 ---
 
-### Session 4 — Web Frontend (Minimum Viable)
+## Session 4 — Web Frontend *(needs Session 3)*
 
-**Deliverable:** Both actor journeys completeable through a browser, not just `curl`.
+| Route | Purpose | Auth gate |
+|-------|---------|-----------|
+| `/` | Board — paginated gig cards | none |
+| `/gigs/[id]` | Gig detail + apply button | apply hidden to visitor/unverified |
+| `/register` | Registration form (email, phone, DOB) | none |
+| `/login` | Login form | none |
+| `/verify` | OTP entry (email + phone) | requireAuth |
+| `/gigs/new` | Post-a-gig form (region picker, price, expiry) | requireVerified → redirect /login |
+| `/my/gigs` | Poster's gig list | requireAuth |
+| `/my/gigs/[id]/applications` | Poster views + accepts applications | requireAuth + poster |
+| `/my/applications` | Worker's application list | requireAuth |
+| `/contracts/[id]` | Contract view + sign/reject buttons | requireAuth + party |
 
-**Pages to implement:**
-
-| Route | Description |
-|-------|-------------|
-| `/` | Board — paginated gig cards; public fields |
-| `/gigs/[id]` | Gig detail with apply button (hidden to visitors/unverified) |
-| `/register` | Registration form (email, phone, DOB) |
-| `/login` | Login form |
-| `/verify` | OTP entry for email + phone |
-| `/gigs/new` | Post-a-gig form (region picker, price type, expiry date) |
-| `/my/gigs` | "My Gigs" — poster view of own gigs |
-| `/my/gigs/[id]/applications` | Application list for a poster's gig |
-| `/my/applications` | Worker's application list |
-| `/contracts/[id]` | Contract detail + sign/reject buttons |
-
-**Acceptance criteria:**
-
-- Visitor lands on `/` and sees at least one gig card (seeded or manually created)
-- Visitor clicks "Register" and completes registration form → redirected to `/verify`
-- User enters OTPs from console logs → redirected to board as verified user
-- Verified user posts a gig via `/gigs/new` form → gig appears on board
-- Verified user applies for another gig from `/gigs/[id]` → confirmation shown
-- Poster sees application on `/my/gigs/[id]/applications` and accepts it
-- Contract draft appears at `/contracts/[id]` for both parties
-- Poster signs; worker signs → page shows "In Progress" status
-- Unauthenticated access to `/gigs/new` → redirect to `/login`
+**Acceptance gate:** visitor sees ≥1 card · register→/verify · OTPs from console→verified user on board · post gig via form→appears on board · apply from detail page→confirmation · poster accepts on applications page · contract page visible to both parties · poster+worker both sign→"In Progress" shown · `/gigs/new` unauthenticated→redirect `/login`.
 
 ---
 
-## 5. What Is Blocked and Why
+## Blockers
 
-| Item | Blocked by | Mitigation |
-|------|-----------|-----------|
-| BullMQ timers (48h, 14d) | Redis infrastructure + Session 3 complete | Defer entirely; timers are post-UAT |
-| File upload (R2) | R2 bucket + credentials not configured | Skip images in UAT; gigs without images are valid |
-| Real SMS gateway | External SMS provider credentials | Console-logged OTP is explicitly accepted for internal UAT |
-| Admin dispute tools | Session 3 + arbiter workflow | Defer; no dispute flow in UAT scope |
-| Billing/invoices | Session 3 + BullMQ | Defer entirely |
-| Reviews | Contract completion flow | Defer; UAT stops at `in_progress` |
+| Item | Blocker | Mitigation for UAT |
+|------|---------|-------------------|
+| BullMQ timers (48h, 14d) | Redis + Session 3 | Defer entirely — post-UAT |
+| File upload (R2) | R2 bucket not configured | Skip images — gigs without images are valid |
+| Real SMS | Provider credentials | Console-log OTP — accepted for internal UAT |
+| Admin / dispute tools | Session 3 + arbiter flow | Defer — not in UAT journeys |
+| Billing / invoices | Session 3 + BullMQ | Defer entirely |
+| Reviews | Contract completion | Defer — UAT stops at `in_progress` |
 
 ---
 
-**Related:** [backlog.json](../backlog.json) · [auth-flow.md](../architecture/auth-flow.md) · [SYSTEM_DESIGN.md](../../SYSTEM_DESIGN.md)
+**See also:** [backlog.json](../backlog.json) · [auth-flow.md](../architecture/auth-flow.md) · [database-design.md](../architecture/database-design.md)

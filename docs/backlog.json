@@ -29,7 +29,7 @@
         { "id": "AUTH-1", "title": "POST /auth/register (bcrypt, age≥18, email+phone unique)", "status": "pending" },
         { "id": "AUTH-2", "title": "POST /auth/login", "status": "pending" },
         { "id": "AUTH-3", "title": "POST /auth/refresh (token rotation)", "status": "pending" },
-        { "id": "AUTH-4", "title": "POST /auth/verify/email (OTC console-logged)", "status": "pending" },
+        { "id": "AUTH-4", "title": "POST /auth/verify/email (OTP console-logged)", "status": "pending" },
         { "id": "AUTH-5", "title": "POST /auth/verify/phone (OTP console-logged)", "status": "pending" },
         { "id": "AUTH-6", "title": "GET /auth/me", "status": "pending" },
         { "id": "AUTH-7", "title": "POST /auth/logout", "status": "pending" },
