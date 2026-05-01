@@ -10,6 +10,15 @@
 const fs = require('fs');
 const path = require('path');
 
+// Agent definition files
+const AGENT_FILES = [
+  '.github/agents/delivery-orchestrator.agent.md',
+  '.github/agents/backend-workflow-builder.agent.md',
+  '.github/agents/test-strategy-agent.agent.md',
+  '.github/agents/documentation-handoff-agent.agent.md',
+];
+
+// All required files (includes agent files)
 const REQUIRED_FILES = [
   'SYSTEM_DESIGN.md',
   'docs/backlog.json',
@@ -17,17 +26,7 @@ const REQUIRED_FILES = [
   'docs/guides/custom-ai-agents.md',
   'docs/guides/agent-skills-map.md',
   '.github/agents/sessions.yml',
-  '.github/agents/delivery-orchestrator.agent.md',
-  '.github/agents/backend-workflow-builder.agent.md',
-  '.github/agents/test-strategy-agent.agent.md',
-  '.github/agents/documentation-handoff-agent.agent.md',
-];
-
-const AGENT_FILES = [
-  '.github/agents/delivery-orchestrator.agent.md',
-  '.github/agents/backend-workflow-builder.agent.md',
-  '.github/agents/test-strategy-agent.agent.md',
-  '.github/agents/documentation-handoff-agent.agent.md',
+  ...AGENT_FILES,
 ];
 
 function checkFile(filePath) {
