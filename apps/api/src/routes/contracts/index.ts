@@ -155,7 +155,7 @@ export async function contractRoutes(app: FastifyInstance): Promise<void> {
         .where(eq(contracts.id, id));
 
       if (contract.feeEligible && contract.agreedPrice) {
-        // Use integer arithmetic to avoid floating-point rounding errors
+        // Convert to cents first to avoid floating-point drift, then round fees before converting back.
         const priceInCents = Math.round(parseFloat(contract.agreedPrice) * 100);
         const posterFee = (Math.round(priceInCents * POSTER_FEE_RATE) / 100).toFixed(2);
         const workerFee = (Math.round(priceInCents * WORKER_FEE_RATE) / 100).toFixed(2);
@@ -235,9 +235,12 @@ export async function contractRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(400).send({ error: 'Cannot cancel contract in current status', statusCode: 400 });
     }
 
-    // Grace period: 24h from when the contract was first signed (earliest of posterSignedAt/workerSignedAt)
-    const firstSignedAt = contract.posterSignedAt ?? contract.workerSignedAt ?? contract.createdAt;
-    const withinGrace = Date.now() - firstSignedAt.getTime() <= GRACE_PERIOD_MS;
+    // Grace period: 24h from when both parties signed (contract entered in_progress).
+    // Use the later of the two signatures so the window starts when the contract actually became active.
+    const contractStartedAt = (contract.posterSignedAt && contract.workerSignedAt)
+      ? new Date(Math.max(contract.posterSignedAt.getTime(), contract.workerSignedAt.getTime()))
+      : contract.createdAt;
+    const withinGrace = Date.now() - contractStartedAt.getTime() <= GRACE_PERIOD_MS;
     const [updated] = await db.update(contracts)
       .set({
         status: 'cancelled',
@@ -308,9 +311,10 @@ export async function contractRoutes(app: FastifyInstance): Promise<void> {
     if (parsed.data.status === 'accepted') {
       const contractUpdate: Record<string, unknown> = { updatedAt: now };
       if (appendix.additionalCompensation) {
-        const currentPrice = parseFloat(contract.agreedPrice ?? '0');
-        const additional = parseFloat(appendix.additionalCompensation);
-        contractUpdate['agreedPrice'] = (currentPrice + additional).toFixed(2);
+        // Use cents-based arithmetic to avoid floating-point drift across multiple appendices.
+        const currentCents = Math.round(parseFloat(contract.agreedPrice ?? '0') * 100);
+        const additionalCents = Math.round(parseFloat(appendix.additionalCompensation) * 100);
+        contractUpdate['agreedPrice'] = ((currentCents + additionalCents) / 100).toFixed(2);
       }
       if (appendix.newDueAt) contractUpdate['dueAt'] = appendix.newDueAt;
       if (appendix.newStartAt) contractUpdate['agreedStartAt'] = appendix.newStartAt;

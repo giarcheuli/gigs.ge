@@ -77,9 +77,10 @@ export async function messageRoutes(app: FastifyInstance): Promise<void> {
     if (!message) return reply.status(404).send({ error: 'Message not found', statusCode: 404 });
     if (message.recipientId !== request.user.id) return reply.status(403).send({ error: 'Forbidden', statusCode: 403 });
 
+    // Ownership already verified above; update by id only.
     const [updated] = await db.update(messages)
       .set({ readAt: new Date() })
-      .where(and(eq(messages.id, id), eq(messages.recipientId, request.user.id)))
+      .where(eq(messages.id, id))
       .returning();
     return reply.send(updated);
   });
