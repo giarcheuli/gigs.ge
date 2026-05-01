@@ -50,13 +50,13 @@ export async function contractsRoutes(app: FastifyInstance) {
     }
 
     const now = new Date();
-    const posterSignedAt = isPoster ? (contract.posterSignedAt ?? now) : contract.posterSignedAt;
-    const workerSignedAt = isWorker ? (contract.workerSignedAt ?? now) : contract.workerSignedAt;
+    const posterIsSigned = Boolean(contract.posterSignedAt || isPoster);
+    const workerIsSigned = Boolean(contract.workerSignedAt || isWorker);
 
     const [updatedContract] = await db.update(contracts).set({
       ...(isPoster && !contract.posterSignedAt && { posterSignedAt: now }),
       ...(isWorker && !contract.workerSignedAt && { workerSignedAt: now }),
-      ...(posterSignedAt && workerSignedAt && { status: 'in_progress' }),
+      ...(posterIsSigned && workerIsSigned && { status: 'in_progress' }),
       updatedAt: now,
     }).where(eq(contracts.id, params.id)).returning();
 

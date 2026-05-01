@@ -244,6 +244,28 @@ describe('Applications + Contracts Routes Integration', () => {
     });
   });
 
+  it('rejects acceptance when the gig is not fixed-price in this UAT slice', async () => {
+    const rangeGig = { ...activeGig, priceType: 'range', priceFixed: null };
+
+    mockDb.query.applications.findFirst.mockResolvedValueOnce(pendingApplication);
+    mockDb.query.gigs.findFirst.mockResolvedValueOnce(rangeGig);
+
+    const app = await buildApp();
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/v1/applications/${pendingApplication.id}/accept`,
+      headers: { authorization: `Bearer ${makeToken(POSTER_ID)}` },
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toEqual({
+      error: 'Only fixed-price gigs are currently supported for contract acceptance',
+      statusCode: 409,
+    });
+    expect(mockDb.transaction).not.toHaveBeenCalled();
+  });
+
   it('allows contract parties to view and sign a draft contract until it reaches in_progress', async () => {
     const posterSignedContract = {
       ...contractDraft,

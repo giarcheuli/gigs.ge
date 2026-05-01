@@ -100,6 +100,13 @@ export async function applicationsRoutes(app: FastifyInstance) {
       return reply.status(409).send({ error: 'Only pending applications can be accepted', statusCode: 409 });
     }
 
+    if (gig.priceType !== 'fixed' || !gig.priceFixed) {
+      return reply.status(409).send({
+        error: 'Only fixed-price gigs are currently supported for contract acceptance',
+        statusCode: 409,
+      });
+    }
+
     const existingContract = await db.query.contracts.findFirst({
       where: eq(contracts.applicationId, application.id),
     });
@@ -119,7 +126,7 @@ export async function applicationsRoutes(app: FastifyInstance) {
         gigId: application.gigId,
         posterId: gig.posterId,
         workerId: application.applicantId,
-        agreedPrice: gig.priceType === 'fixed' ? gig.priceFixed : null,
+        agreedPrice: gig.priceFixed,
         agreedStartAt: gig.availableFrom ?? new Date(),
         dueAt: gig.availableTo,
         status: 'draft',

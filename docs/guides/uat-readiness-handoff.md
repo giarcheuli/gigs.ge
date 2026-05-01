@@ -15,9 +15,10 @@ The frontend is still far behind the backend. Both `apps/web` and `apps/admin` a
    - gigs: create draft, update draft, publish, list visible gigs, fetch visible gig
    - applications: apply to active gig, poster list by gig, poster accept
    - contracts: party fetch, party sign (draft → in_progress once both sign)
-2. The database schema already covers users, profiles, gigs, applications, contracts, billing, reviews, messaging, and moderation-related tables.
-3. Automated tests now exist for auth helper logic and request-level auth flows.
-4. Regions and cities have a seed path, which helps with realistic Georgia-specific fixtures later.
+2. The applications → contracts UAT slice intentionally accepts only fixed-price gigs for now, so `agreedPrice` stays explicit while richer negotiation is deferred.
+3. The database schema already covers users, profiles, gigs, applications, contracts, billing, reviews, messaging, and moderation-related tables.
+4. Automated tests now exist for auth helper logic and request-level auth/application/gig/contract flows.
+5. Regions and cities have a seed path, which helps with realistic Georgia-specific fixtures later.
 
 ## Reality Check
 
