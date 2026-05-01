@@ -5,6 +5,7 @@ import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import { env } from './config/env.js';
 import { authRoutes } from './routes/auth/index.js';
+import { gigsRoutes } from './routes/gigs/index.js';
 
 export async function buildApp() {
   const app = Fastify({
@@ -50,8 +51,8 @@ export async function buildApp() {
 
   // ── API Routes ──
   await app.register(authRoutes, { prefix: '/api/v1/auth' });
+  await app.register(gigsRoutes, { prefix: '/api/v1/gigs' });
   // await app.register(userRoutes, { prefix: '/api/v1/users' });
-  // await app.register(gigRoutes, { prefix: '/api/v1/gigs' });
   // await app.register(contractRoutes, { prefix: '/api/v1/contracts' });
   // await app.register(notificationRoutes, { prefix: '/api/v1/notifications' });
   // await app.register(messageRoutes, { prefix: '/api/v1/messages' });

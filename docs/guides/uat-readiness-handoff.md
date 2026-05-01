@@ -19,7 +19,7 @@ The frontend is still far behind the backend. Both `apps/web` and `apps/admin` a
 
 The biggest blocker to UAT is not test count. It is missing product breadth.
 
-Right now, only auth is mounted in the API, and the two frontend apps do not yet implement browse, post, apply, contract, dispute, or admin moderation flows. That means a stakeholder cannot perform the end-to-end scenarios that define the business.
+Right now, auth and the first gigs happy-path routes are mounted in the API, and the two frontend apps do not yet implement browse, post, apply, contract, dispute, or admin moderation flows. That means a stakeholder still cannot perform full end-to-end scenarios that define the business.
 
 Because of that, calling the project "pre-development" is no longer accurate, but calling it "UAT-ready" would also be misleading. The honest state is early implementation with a strong schema and auth foundation.
 
