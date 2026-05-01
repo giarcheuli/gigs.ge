@@ -155,19 +155,22 @@ export async function contractRoutes(app: FastifyInstance): Promise<void> {
         .where(eq(contracts.id, id));
 
       if (contract.feeEligible && contract.agreedPrice) {
-        const price = parseFloat(contract.agreedPrice);
+        // Use integer arithmetic to avoid floating-point rounding errors
+        const priceInCents = Math.round(parseFloat(contract.agreedPrice) * 100);
+        const posterFee = (Math.round(priceInCents * POSTER_FEE_RATE) / 100).toFixed(2);
+        const workerFee = (Math.round(priceInCents * WORKER_FEE_RATE) / 100).toFixed(2);
         await db.insert(billingLedger).values([
           {
             userId: contract.posterId,
             contractId: contract.id,
-            amount: (price * POSTER_FEE_RATE).toFixed(2),
+            amount: posterFee,
             type: 'poster_fee',
             status: 'pending',
           },
           {
             userId: contract.workerId,
             contractId: contract.id,
-            amount: (price * WORKER_FEE_RATE).toFixed(2),
+            amount: workerFee,
             type: 'worker_fee',
             status: 'pending',
           },
@@ -232,7 +235,9 @@ export async function contractRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(400).send({ error: 'Cannot cancel contract in current status', statusCode: 400 });
     }
 
-    const withinGrace = Date.now() - contract.createdAt.getTime() <= GRACE_PERIOD_MS;
+    // Grace period: 24h from when the contract was first signed (earliest of posterSignedAt/workerSignedAt)
+    const firstSignedAt = contract.posterSignedAt ?? contract.workerSignedAt ?? contract.createdAt;
+    const withinGrace = Date.now() - firstSignedAt.getTime() <= GRACE_PERIOD_MS;
     const [updated] = await db.update(contracts)
       .set({
         status: 'cancelled',

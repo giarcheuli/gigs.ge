@@ -3,7 +3,7 @@ import { db } from '../../db/index.js';
 import { users, userProfiles, refreshTokens, otpCodes } from '../../db/schema/index.js';
 import { eq, and, isNull, gt } from 'drizzle-orm';
 import bcrypt from 'bcryptjs';
-import { randomBytes, createHash } from 'crypto';
+import { randomBytes, createHash, randomUUID } from 'crypto';
 import { signAccessToken } from '../../plugins/jwt.js';
 import { requireAuth } from '../../plugins/auth.js';
 import {
@@ -84,7 +84,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
 
     await db.update(users).set({ lastAccessedAt: new Date() }).where(eq(users.id, user.id));
 
-    const familyId = crypto.randomUUID();
+    const familyId = randomUUID();
     const rawToken = randomBytes(32).toString('hex');
     const tokenHash = sha256(rawToken);
 
