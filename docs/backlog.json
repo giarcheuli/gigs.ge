@@ -1,195 +1,224 @@
 {
-  "_comment": "Implementation backlog for gigs.ge. Reflects actual status as of 2026-05-01. Do not mark an item done unless the code is merged and reachable.",
-  "lastUpdated": "2026-05-01",
-  "version": "1.1",
-  "areas": [
+  "meta": {
+    "updatedAt": "2026-05-01",
+    "goal": "Reach a narrow but credible stakeholder UAT as soon as possible.",
+    "repoState": "early_implementation",
+    "summary": "Backend auth is the only mounted API domain with unit and request-level integration tests. Shared schema and database structure are broad, but web and admin are still placeholder UIs and the main business routes are not mounted yet."
+  },
+  "uatCriticalPath": [
     {
-      "area": "infrastructure",
-      "label": "Infrastructure & Scaffold",
+      "order": 1,
+      "task": "Finish auth workflow coverage and harden the verified-user path.",
+      "status": "in_progress"
+    },
+    {
+      "order": 2,
+      "task": "Implement and mount gigs, applications, and contract happy-path API routes.",
+      "status": "not_started"
+    },
+    {
+      "order": 3,
+      "task": "Replace placeholder web/admin pages with minimal UAT-ready user flows.",
+      "status": "not_started"
+    },
+    {
+      "order": 4,
+      "task": "Prepare stakeholder-facing docs, smoke checks, and a repeatable UAT environment.",
+      "status": "not_started"
+    }
+  ],
+  "engineering": [
+    {
+      "task": "Expand unit test coverage for backend API routes (e.g., auth, gigs, contracts).",
+      "priority": "high",
       "status": "done",
-      "items": [
-        { "id": "INF-1", "title": "Turborepo + pnpm monorepo", "status": "done" },
-        { "id": "INF-2", "title": "Fastify app factory (cors, cookie, helmet, rate-limit, error handler)", "status": "done" },
-        { "id": "INF-3", "title": "Database schema — all 21 Drizzle tables + Drizzle relations", "status": "done" },
-        { "id": "INF-4", "title": "packages/shared — constants, types, Zod schemas", "status": "done" },
-        { "id": "INF-5", "title": "Geographic seed — 11 regions, ~44 cities", "status": "done" },
-        { "id": "INF-6", "title": "Environment config (apps/api/src/config/env.ts)", "status": "done" },
-        { "id": "INF-7", "title": "Web app placeholder (Next.js boots)", "status": "done" },
-        { "id": "INF-8", "title": "Admin app placeholder (Next.js boots)", "status": "done" },
-        { "id": "INF-9", "title": "Architecture docs (auth-flow, database-design, monorepo-structure)", "status": "done" },
-        { "id": "INF-10", "title": "Getting-started guide", "status": "done" }
-      ]
+      "phase": "uat_foundation"
     },
     {
-      "area": "session-1-auth",
-      "label": "Session 1 — Auth API",
-      "status": "pending",
-      "uatRequired": true,
-      "items": [
-        { "id": "AUTH-1", "title": "POST /auth/register (bcrypt, age≥18, email+phone unique)", "status": "pending" },
-        { "id": "AUTH-2", "title": "POST /auth/login", "status": "pending" },
-        { "id": "AUTH-3", "title": "POST /auth/refresh (token rotation)", "status": "pending" },
-        { "id": "AUTH-4", "title": "POST /auth/verify/email (OTP console-logged)", "status": "pending" },
-        { "id": "AUTH-5", "title": "POST /auth/verify/phone (OTP console-logged)", "status": "pending" },
-        { "id": "AUTH-6", "title": "GET /auth/me", "status": "pending" },
-        { "id": "AUTH-7", "title": "POST /auth/logout", "status": "pending" },
-        { "id": "AUTH-8", "title": "requireAuth preHandler guard", "status": "pending" },
-        { "id": "AUTH-9", "title": "requireVerified preHandler guard", "status": "pending" },
-        { "id": "AUTH-10", "title": "requireAdmin preHandler guard", "status": "pending" }
-      ]
+      "task": "Write integration tests for critical workflows (e.g., user authentication, gig posting, contract lifecycle).",
+      "priority": "high",
+      "status": "in_progress",
+      "phase": "uat_critical"
     },
     {
-      "area": "session-2-gigs",
-      "label": "Session 2 — Geography + Gig API",
-      "status": "pending",
-      "uatRequired": true,
-      "blockedBy": ["session-1-auth"],
-      "items": [
-        { "id": "GEO-1", "title": "GET /regions", "status": "pending" },
-        { "id": "GEO-2", "title": "GET /regions/:id/cities", "status": "pending" },
-        { "id": "GIG-1", "title": "POST /gigs (draft; enforce expiry ≤ 30 days)", "status": "pending" },
-        { "id": "GIG-2", "title": "GET /gigs (board; visibility filtering by auth level)", "status": "pending" },
-        { "id": "GIG-3", "title": "GET /gigs/:id (visibility rules applied)", "status": "pending" },
-        { "id": "GIG-4", "title": "PATCH /gigs/:id (poster-only edit)", "status": "pending" },
-        { "id": "GIG-5", "title": "PATCH /gigs/:id/publish (draft → active)", "status": "pending" },
-        { "id": "GIG-6", "title": "PATCH /gigs/:id/cancel (active/shelf → cancelled)", "status": "pending" }
-      ]
+      "task": "Add end-to-end tests for user flows (e.g., gig poster creating a gig, worker applying, contract completion).",
+      "priority": "high",
+      "status": "not_started",
+      "phase": "uat_critical"
     },
     {
-      "area": "session-3-contracts",
-      "label": "Session 3 — Applications + Contracts API",
-      "status": "pending",
-      "uatRequired": true,
-      "blockedBy": ["session-2-gigs"],
-      "items": [
-        { "id": "APP-1", "title": "POST /gigs/:id/applications (unique per worker; 409 on duplicate)", "status": "pending" },
-        { "id": "APP-2", "title": "GET /gigs/:id/applications (poster-only)", "status": "pending" },
-        { "id": "APP-3", "title": "PATCH /applications/:id (accept/reject; accepted triggers contract draft)", "status": "pending" },
-        { "id": "CON-1", "title": "GET /contracts/:id (party-only)", "status": "pending" },
-        { "id": "CON-2", "title": "PATCH /contracts/:id (poster edits draft — price, dates)", "status": "pending" },
-        { "id": "CON-3", "title": "POST /contracts/:id/sign (both signatures → in_progress)", "status": "pending" },
-        { "id": "CON-4", "title": "POST /contracts/:id/reject (worker rejects draft)", "status": "pending" },
-        { "id": "NOT-1", "title": "DB notification writes (APPLICATION_ACCEPTED, CONTRACT_DRAFT_READY)", "status": "pending" }
-      ]
+      "task": "Test edge cases for token expiration, invalid inputs, and concurrency.",
+      "priority": "medium",
+      "status": "not_started",
+      "phase": "uat_hardening"
     },
     {
-      "area": "session-4-frontend",
-      "label": "Session 4 — Web Frontend (Minimum Viable)",
-      "status": "pending",
-      "uatRequired": true,
-      "blockedBy": ["session-3-contracts"],
-      "items": [
-        { "id": "WEB-1", "title": "/ — gig board (public, paginated)", "status": "pending" },
-        { "id": "WEB-2", "title": "/gigs/[id] — gig detail + apply button", "status": "pending" },
-        { "id": "WEB-3", "title": "/register — registration form", "status": "pending" },
-        { "id": "WEB-4", "title": "/login — login form", "status": "pending" },
-        { "id": "WEB-5", "title": "/verify — OTP entry (email + phone)", "status": "pending" },
-        { "id": "WEB-6", "title": "/gigs/new — post-a-gig form (region picker, price type, expiry)", "status": "pending" },
-        { "id": "WEB-7", "title": "/my/gigs — poster's gig list", "status": "pending" },
-        { "id": "WEB-8", "title": "/my/gigs/[id]/applications — poster views applications", "status": "pending" },
-        { "id": "WEB-9", "title": "/my/applications — worker's application list", "status": "pending" },
-        { "id": "WEB-10", "title": "/contracts/[id] — contract view + sign/reject", "status": "pending" },
-        { "id": "WEB-11", "title": "Auth context (access token in memory; auto-refresh on boot)", "status": "pending" }
-      ]
+      "task": "Finalize and test Cloudflare R2 integration for file uploads (e.g., gig images, user avatars, dispute evidence).",
+      "priority": "medium",
+      "status": "not_started",
+      "phase": "uat_scope_dependent"
     },
     {
-      "area": "post-uat-contracts",
-      "label": "Post-UAT — Contract Completion & Disputes",
-      "status": "pending",
-      "uatRequired": false,
-      "blockedBy": ["session-3-contracts"],
-      "items": [
-        { "id": "CON-5", "title": "POST /contracts/:id/complete (mark done; half-time rule enforced)", "status": "pending" },
-        { "id": "CON-6", "title": "POST /contracts/:id/not-done (poster marks not done → disputed)", "status": "pending" },
-        { "id": "CON-7", "title": "POST /contracts/:id/quit (worker quits; fee if after 24h)", "status": "pending" },
-        { "id": "CON-8", "title": "POST /contracts/:id/cancel (mutual cancel within 24h grace period)", "status": "pending" },
-        { "id": "DIS-1", "title": "POST /contracts/:id/appendices (resolution appendix)", "status": "pending" },
-        { "id": "DIS-2", "title": "PATCH /appendices/:id (accept/reject appendix)", "status": "pending" },
-        { "id": "DIS-3", "title": "POST /contracts/:id/evidence (submit arbiter evidence)", "status": "pending" }
-      ]
+      "task": "Validate EXIF stripping and MIME type checks for uploaded files.",
+      "priority": "medium",
+      "status": "not_started",
+      "phase": "uat_scope_dependent"
     },
     {
-      "area": "post-uat-timers",
-      "label": "Post-UAT — BullMQ Timers",
-      "status": "pending",
-      "uatRequired": false,
-      "blockedBy": ["post-uat-contracts"],
-      "items": [
-        { "id": "BQ-1", "title": "48h auto-complete worker (pending_completion silence)", "status": "pending" },
-        { "id": "BQ-2", "title": "14-day overdue auto-complete worker", "status": "pending" },
-        { "id": "BQ-3", "title": "Overdue reminder notifications (+24h, +72h, +7d)", "status": "pending" },
-        { "id": "BQ-4", "title": "7-day dispute auto-resolve worker", "status": "pending" },
-        { "id": "BQ-5", "title": "Gig expiry worker (active → expired/shelf)", "status": "pending" }
-      ]
+      "task": "Conduct load testing for the Fastify API to ensure scalability.",
+      "priority": "low",
+      "status": "not_started",
+      "phase": "post_uat"
     },
     {
-      "area": "post-uat-billing",
-      "label": "Post-UAT — Billing & Invoices",
-      "status": "pending",
-      "uatRequired": false,
-      "blockedBy": ["post-uat-contracts"],
-      "items": [
-        { "id": "BIL-1", "title": "Fee ledger writes on contract completion (3% poster / 2% worker)", "status": "pending" },
-        { "id": "BIL-2", "title": "Monthly invoice generation cron (carry-over < 1.00 GEL)", "status": "pending" },
-        { "id": "BIL-3", "title": "PDF invoice generation", "status": "pending" },
-        { "id": "BIL-4", "title": "GET /invoices (user's invoices)", "status": "pending" },
-        { "id": "BIL-5", "title": "Admin: PATCH /admin/invoices/:id/paid", "status": "pending" },
-        { "id": "BIL-6", "title": "User restriction after 30-day unpaid invoice", "status": "pending" }
-      ]
+      "task": "Optimize database queries (e.g., Drizzle ORM) for high-traffic scenarios.",
+      "priority": "medium",
+      "status": "not_started",
+      "phase": "uat_hardening"
     },
     {
-      "area": "post-uat-admin",
-      "label": "Post-UAT — Admin Panel",
-      "status": "pending",
-      "uatRequired": false,
-      "blockedBy": ["session-1-auth"],
-      "items": [
-        { "id": "ADM-1", "title": "GET /admin/users (list + filter)", "status": "pending" },
-        { "id": "ADM-2", "title": "PATCH /admin/users/:id (status, role)", "status": "pending" },
-        { "id": "ADM-3", "title": "GET /admin/contracts?status=arbitration", "status": "pending" },
-        { "id": "ADM-4", "title": "POST /admin/contracts/:id/resolve (arbiter decision)", "status": "pending" },
-        { "id": "ADM-5", "title": "GET /admin/gigs (list + moderate)", "status": "pending" },
-        { "id": "ADM-6", "title": "Admin dashboard frontend", "status": "pending" }
-      ]
+      "task": "Test frontend performance for mobile-first responsiveness.",
+      "priority": "medium",
+      "status": "not_started",
+      "phase": "uat_hardening"
     },
     {
-      "area": "post-uat-storage",
-      "label": "Post-UAT — File Storage (R2)",
-      "status": "pending",
-      "uatRequired": false,
-      "items": [
-        { "id": "R2-1", "title": "R2 bucket config + upload utility (EXIF strip, MIME validation)", "status": "pending" },
-        { "id": "R2-2", "title": "POST /gigs/:id/images (upload gig images)", "status": "pending" },
-        { "id": "R2-3", "title": "POST /applications/:id/attachments", "status": "pending" },
-        { "id": "R2-4", "title": "POST /contracts/:id/evidence/:evidenceId/files", "status": "pending" },
-        { "id": "R2-5", "title": "DELETE /gigs/:id/images/:imageId", "status": "pending" }
-      ]
+      "task": "Standardize error responses across all API routes.",
+      "priority": "high",
+      "status": "not_started",
+      "phase": "uat_critical"
     },
     {
-      "area": "post-uat-reviews",
-      "label": "Post-UAT — Reviews",
-      "status": "pending",
-      "uatRequired": false,
-      "blockedBy": ["post-uat-contracts"],
-      "items": [
-        { "id": "REV-1", "title": "POST /contracts/:id/reviews (14-day window after completion)", "status": "pending" },
-        { "id": "REV-2", "title": "GET /users/:id/reviews (public profile reviews)", "status": "pending" }
-      ]
+      "task": "Implement logging for critical errors (e.g., token verification failures).",
+      "priority": "medium",
+      "status": "not_started",
+      "phase": "uat_hardening"
     },
     {
-      "area": "post-uat-messaging",
-      "label": "Post-UAT — Messaging & Notifications",
-      "status": "pending",
-      "uatRequired": false,
-      "blockedBy": ["session-1-auth"],
-      "items": [
-        { "id": "MSG-1", "title": "POST /messages (send DM)", "status": "pending" },
-        { "id": "MSG-2", "title": "GET /messages (inbox/sent)", "status": "pending" },
-        { "id": "NOT-2", "title": "GET /notifications (user's notification list)", "status": "pending" },
-        { "id": "NOT-3", "title": "PATCH /notifications/:id/read", "status": "pending" },
-        { "id": "NOT-4", "title": "Email notification delivery (transactional email provider)", "status": "pending" },
-        { "id": "NOT-5", "title": "Real SMS gateway integration", "status": "pending" }
-      ]
+      "task": "Add backend hooks to log user actions (e.g., gig creation, contract updates).",
+      "priority": "low",
+      "status": "not_started",
+      "phase": "post_uat"
+    },
+    {
+      "task": "Integrate a frontend analytics tool (e.g., Google Analytics, PostHog).",
+      "priority": "low",
+      "status": "not_started",
+      "phase": "post_uat"
+    }
+  ],
+  "business": [
+    {
+      "task": "Create step-by-step guides for gig posters and workers (e.g., how to post a gig, how to apply for gigs).",
+      "priority": "high",
+      "status": "not_started",
+      "phase": "uat_critical"
+    },
+    {
+      "task": "Develop a FAQ section addressing common user concerns.",
+      "priority": "high",
+      "status": "not_started",
+      "phase": "uat_critical"
+    },
+    {
+      "task": "Define a go-to-market plan (e.g., target audience segmentation, social media campaigns).",
+      "priority": "low",
+      "status": "not_started",
+      "phase": "post_uat"
+    },
+    {
+      "task": "Create marketing assets (e.g., explainer videos, blog posts highlighting unique features).",
+      "priority": "low",
+      "status": "not_started",
+      "phase": "post_uat"
+    },
+    {
+      "task": "Develop educational content on the fee structure and dispute resolution process.",
+      "priority": "medium",
+      "status": "not_started",
+      "phase": "uat_hardening"
+    },
+    {
+      "task": "Host webinars or Q&A sessions for early adopters.",
+      "priority": "low",
+      "status": "not_started",
+      "phase": "post_uat"
+    }
+  ],
+  "product": [
+    {
+      "task": "Finalize user-facing documentation (e.g., platform overview, contract lifecycle explanation, dispute resolution flow).",
+      "priority": "high",
+      "status": "not_started",
+      "phase": "uat_critical"
+    },
+    {
+      "task": "Add developer documentation for API usage.",
+      "priority": "medium",
+      "status": "not_started",
+      "phase": "uat_hardening"
+    },
+    {
+      "task": "Address remaining usability issues (e.g., simplify navigation, ensure mobile-first design is polished).",
+      "priority": "high",
+      "status": "not_started",
+      "phase": "uat_critical"
+    },
+    {
+      "task": "Conduct user testing to gather feedback on the interface.",
+      "priority": "high",
+      "status": "not_started",
+      "phase": "uat_critical"
+    },
+    {
+      "task": "Implement notifications for key events (e.g., contract updates, dispute resolution progress).",
+      "priority": "medium",
+      "status": "not_started",
+      "phase": "uat_scope_dependent"
+    },
+    {
+      "task": "Add search and filtering options for gigs.",
+      "priority": "medium",
+      "status": "not_started",
+      "phase": "uat_scope_dependent"
+    },
+    {
+      "task": "Build an admin dashboard to track user activity, revenue metrics, and dispute resolution statistics.",
+      "priority": "low",
+      "status": "not_started",
+      "phase": "post_uat"
+    }
+  ],
+  "marketing": [
+    {
+      "task": "Create a brand identity (e.g., logo, color scheme, typography).",
+      "priority": "low",
+      "status": "not_started",
+      "phase": "post_uat"
+    },
+    {
+      "task": "Build a landing page highlighting the platform’s value proposition.",
+      "priority": "medium",
+      "status": "not_started",
+      "phase": "uat_scope_dependent"
+    },
+    {
+      "task": "Launch a community forum for gig posters and workers.",
+      "priority": "low",
+      "status": "not_started",
+      "phase": "post_uat"
+    },
+    {
+      "task": "Partner with local influencers or organizations to promote the platform.",
+      "priority": "low",
+      "status": "not_started",
+      "phase": "post_uat"
+    },
+    {
+      "task": "Set up feedback loops (e.g., surveys for early adopters, in-app feedback forms).",
+      "priority": "medium",
+      "status": "not_started",
+      "phase": "uat_hardening"
     }
   ]
 }

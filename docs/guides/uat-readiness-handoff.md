@@ -1,137 +1,60 @@
 # UAT Readiness Handoff
 
-> **Agent context:** Machine-readable summary of what is built, what must be built for UAT, and the exact acceptance gate for each session. No narrative. All facts, all tables.  
-> **Date:** 2026-05-01 · **Backlog:** [backlog.json](../backlog.json) · **Design:** [SYSTEM_DESIGN.md](../../SYSTEM_DESIGN.md)
+This note closes the current session with a grounded view of what the repo can do today, what blocks stakeholder UAT, and what should happen next if the goal is UAT as soon as possible.
 
----
+## Current State
 
-## Implementation State
+The backend is no longer just design work. `apps/api` has a real Fastify app, a broad Drizzle schema, auth endpoints, and a working Jest harness with unit and request-level integration coverage.
 
-| ✅ Done | ❌ Not started |
-|---------|---------------|
-| 21-table Drizzle schema (`apps/api/src/db/schema/`) | All API routes |
-| `packages/shared` — constants, types, Zod schemas | Auth guards (`requireAuth`, `requireVerified`, `requireAdmin`) |
-| Fastify factory — CORS, cookie, helmet, rate-limit, `/health` | Geography handlers |
-| Geographic seed — 11 regions, ~44 cities (idempotent) | Gig / Application / Contract handlers |
-| Architecture docs — `auth-flow`, `database-design`, `monorepo-structure` | Frontend pages (both apps boot, show static heading only) |
-| Web + Admin placeholders boot | BullMQ workers, R2 uploads, notification delivery, messaging |
+The frontend is still far behind the backend. Both `apps/web` and `apps/admin` are placeholder landing pages, so the product does not yet expose the main user journeys that stakeholders would expect in UAT.
 
----
+## Verified Implemented Surface
 
-## UAT Scope: Two Journeys, Stop at `in_progress`
+1. API auth routes exist for register, login, OTP verification and resend, refresh, logout, forgot-password, reset-password, and `me`.
+2. The database schema already covers users, profiles, gigs, applications, contracts, billing, reviews, messaging, and moderation-related tables.
+3. Automated tests now exist for auth helper logic and request-level auth flows.
+4. Regions and cities have a seed path, which helps with realistic Georgia-specific fixtures later.
 
-**Journey A — Poster:** visitor → register → verify (email + phone) → post gig → view applications → accept application → sign contract → `in_progress`
+## Reality Check
 
-**Journey B — Worker:** visitor → register → verify → browse board → apply → receive accepted notification → view contract draft → sign → `in_progress`
+The biggest blocker to UAT is not test count. It is missing product breadth.
 
-**Explicitly out of scope:** contract completion, disputes, arbitration, billing, invoices, reviews, image uploads, file attachments, gig flagging, messaging, admin tools, half-time rule, BullMQ timers.
+Right now, only auth is mounted in the API, and the two frontend apps do not yet implement browse, post, apply, contract, dispute, or admin moderation flows. That means a stakeholder cannot perform the end-to-end scenarios that define the business.
 
----
+Because of that, calling the project "pre-development" is no longer accurate, but calling it "UAT-ready" would also be misleading. The honest state is early implementation with a strong schema and auth foundation.
 
-## Business Rules Gate
+## What UAT ASAP Should Mean
 
-| Rule | Enforced at | UAT? |
-|------|------------|------|
-| Age ≥ 18 | `POST /auth/register` | ✅ required |
-| Email + phone verified before post/apply | `requireVerified` guard | ✅ required |
-| Duplicate apply → `409` | `POST /gigs/:id/applications` (DB UNIQUE already exists) | ✅ required |
-| Gig expiry ≤ 30 days | `POST /gigs` | ✅ required |
-| Visibility field filtering | `GET /gigs` + `GET /gigs/:id` | ✅ required |
-| Both signatures → `in_progress` | `POST /contracts/:id/sign` | ✅ required |
-| 48h auto-complete (BullMQ) | BullMQ worker | ⏳ post-UAT |
-| Half-time rule | `POST /contracts/:id/complete` | ⏳ post-UAT |
-| 24h grace period (fee waiver) | cancel handler | ⏳ post-UAT |
-| 14-day overdue auto-complete | BullMQ worker | ⏳ post-UAT |
-| Fee calculation 3%/2% | ledger write | ⏳ post-UAT |
-| Dispute / appendix flow | dispute handlers | ⏳ post-UAT |
-| Real SMS gateway | OTP handler | ⏳ post-UAT (console-log for UAT) |
-| R2 file upload | storage utility | ⏳ post-UAT |
-| Notification delivery (email/push) | notification worker | ⏳ post-UAT (DB-write stub sufficient) |
-| Admin arbiter tools | admin handlers | ⏳ post-UAT |
+For this repo, the fastest credible path is not "build every planned feature." It is to deliver one narrow but believable happy path:
 
----
+1. A verified user can register, log in, and view their account state.
+2. A poster can create and publish a gig.
+3. A worker can browse that gig and apply.
+4. The poster can move the relationship into a simple contract flow.
+5. Both sides can reach a visible terminal state that demonstrates the trust-based platform concept.
 
-## Session 1 — Auth API
+If that slice works in both API and UI, stakeholder UAT can begin even while deeper features stay behind it.
 
-| M | Path | Guard | Key constraint |
-|---|------|-------|----------------|
-| POST | `/api/v1/auth/register` | — | bcrypt cost=12; age ≥18; console-log OTP; `201` + refresh cookie |
-| POST | `/api/v1/auth/login` | — | `200` + `accessToken` + refresh cookie |
-| POST | `/api/v1/auth/refresh` | — | rotate token; new `accessToken` |
-| POST | `/api/v1/auth/verify/email` | requireAuth | `email_verified=true`; OTP from console |
-| POST | `/api/v1/auth/verify/phone` | requireAuth | `phone_verified=true`; OTP from console |
-| GET  | `/api/v1/auth/me` | requireAuth | current user + profile |
-| POST | `/api/v1/auth/logout` | requireAuth | invalidate refresh token |
+## Recommended Next Work
 
-**Guards:** implement `requireAuth` (401 on miss), `requireVerified` (403 if not verified), `requireAdmin`.
+1. Finish auth workflow test coverage for `refresh`, `logout`, `verify-otp`, `forgot-password`, `reset-password`, and `me`.
+2. Implement and mount the first non-auth route group: gigs.
+3. Implement the smallest application and contract happy path needed to demonstrate hiring, acceptance, and completion.
+4. Replace placeholder web pages with minimal task-focused screens for browse, register/login, post gig, apply, and view contract status.
+5. Add stakeholder-facing documentation: quickstart, UAT script, and FAQ for the trust model.
 
-**Acceptance gate:** valid register→201+cookie · age<18→400 · dup email→409 · login ok→200+token · wrong pwd→401 · refresh ok→new token · verify email OTP ok→`email_verified=true` · verify phone OTP ok→`phone_verified=true` · unverified on guarded route→403 · unauthenticated on guarded route→401.
+## Work That Can Wait Until After First UAT
 
----
+1. Load testing and heavier optimization.
+2. Full analytics rollout.
+3. Rich admin dashboard and community features.
+4. Marketing assets beyond the minimum needed to frame the demo.
 
-## Session 2 — Geography + Gig API *(needs Session 1)*
+## Session Output
 
-| M | Path | Guard | Key constraint |
-|---|------|-------|----------------|
-| GET | `/api/v1/regions` | — | 11 Georgian regions |
-| GET | `/api/v1/regions/:id/cities` | — | cities for region |
-| GET | `/api/v1/gigs` | — | paginated; fields filtered by auth level |
-| GET | `/api/v1/gigs/:id` | — | visibility rules applied |
-| POST | `/api/v1/gigs` | requireVerified | `draft`; expiry ≤30 days enforced |
-| PATCH | `/api/v1/gigs/:id` | requireVerified + poster | update fields |
-| PATCH | `/api/v1/gigs/:id/publish` | requireVerified + poster | `draft→active` |
-| PATCH | `/api/v1/gigs/:id/cancel` | requireVerified + poster | `→cancelled` |
+This session established a backend test harness that respects the repo's runtime-correct ESM import style and added the first auth integration tests. That matters because it gives the next session a stable base for shipping workflow tests instead of arguing with tooling.
 
-**Acceptance gate:** GET /regions→11 items · GET /cities→non-empty · GET /gigs visitor→no streetAddress/contact · GET /gigs verified→visibility fields present · POST no auth→401 · POST unverified→403 · POST expiresAt>30d→400 · POST valid→201 draft · publish→active · PATCH by non-poster→403.
+Related notes:
 
----
-
-## Session 3 — Applications + Contracts API *(needs Session 2)*
-
-| M | Path | Guard | Key constraint |
-|---|------|-------|----------------|
-| POST | `/api/v1/gigs/:id/applications` | requireVerified | unique per worker; 409 on dup |
-| GET | `/api/v1/gigs/:id/applications` | requireVerified + poster | list |
-| PATCH | `/api/v1/applications/:id` | requireVerified + poster | accept→contract draft created; reject→notified |
-| GET | `/api/v1/contracts/:id` | requireAuth + party | view draft |
-| PATCH | `/api/v1/contracts/:id` | requireAuth + poster | edit price/dates |
-| POST | `/api/v1/contracts/:id/sign` | requireAuth + party | both signed→`in_progress` |
-| POST | `/api/v1/contracts/:id/reject` | requireAuth + worker | draft reset; poster notified |
-
-**Acceptance gate:** apply→201 pending · dup apply→409 · non-active gig→400 · accept→contract draft + DB notification row · GET contract by poster→200 draft · PATCH price ok · poster signs→`poster_signed_at` set · worker signs after poster→`in_progress` · third-party sign→403 · worker reject→poster notified, draft revised.
-
----
-
-## Session 4 — Web Frontend *(needs Session 3)*
-
-| Route | Purpose | Auth gate |
-|-------|---------|-----------|
-| `/` | Board — paginated gig cards | none |
-| `/gigs/[id]` | Gig detail + apply button | apply hidden to visitor/unverified |
-| `/register` | Registration form (email, phone, DOB) | none |
-| `/login` | Login form | none |
-| `/verify` | OTP entry (email + phone) | requireAuth |
-| `/gigs/new` | Post-a-gig form (region picker, price, expiry) | requireVerified → redirect /login |
-| `/my/gigs` | Poster's gig list | requireAuth |
-| `/my/gigs/[id]/applications` | Poster views + accepts applications | requireAuth + poster |
-| `/my/applications` | Worker's application list | requireAuth |
-| `/contracts/[id]` | Contract view + sign/reject buttons | requireAuth + party |
-
-**Acceptance gate:** visitor sees ≥1 card · register→/verify · OTPs from console→verified user on board · post gig via form→appears on board · apply from detail page→confirmation · poster accepts on applications page · contract page visible to both parties · poster+worker both sign→"In Progress" shown · `/gigs/new` unauthenticated→redirect `/login`.
-
----
-
-## Blockers
-
-| Item | Blocker | Mitigation for UAT |
-|------|---------|-------------------|
-| BullMQ timers (48h, 14d) | Redis + Session 3 | Defer entirely — post-UAT |
-| File upload (R2) | R2 bucket not configured | Skip images — gigs without images are valid |
-| Real SMS | Provider credentials | Console-log OTP — accepted for internal UAT |
-| Admin / dispute tools | Session 3 + arbiter flow | Defer — not in UAT journeys |
-| Billing / invoices | Session 3 + BullMQ | Defer entirely |
-| Reviews | Contract completion | Defer — UAT stops at `in_progress` |
-
----
-
-**See also:** [backlog.json](../backlog.json) · [auth-flow.md](../architecture/auth-flow.md) · [database-design.md](../architecture/database-design.md)
+1. See `docs/jest-setup.md` for the backend test harness decision.
+2. See `docs/backlog.json` for the UAT-prioritized backlog state.
