@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { db } from '../../db/index.js';
-import { users, userProfiles, gigs, applications, contracts, invoices } from '../../db/schema/index.js';
-import { eq, or, desc, count } from 'drizzle-orm';
+import { users, userProfiles, gigs, applications, contracts, invoices, reviews } from '../../db/schema/index.js';
+import { eq, and, or, desc, count } from 'drizzle-orm';
 import { requireAuth } from '../../plugins/auth.js';
 import { updateProfileSchema, paginationSchema } from '@gigs/shared';
 
@@ -204,14 +204,12 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
     }
     const { page, limit } = parsed.data;
     const offset = (page - 1) * limit;
-    const { reviews } = await import('../../db/schema/index.js');
-    const { eq: eqDrizzle, desc: descDrizzle, count: countDrizzle, and: andDrizzle } = await import('drizzle-orm');
-    const condition = andDrizzle(eqDrizzle(reviews.targetId, id), eqDrizzle(reviews.status, 'published'))!;
+    const condition = and(eq(reviews.targetId, id), eq(reviews.status, 'published'))!;
 
     const [rows, countResult] = await Promise.all([
       db.select().from(reviews).where(condition)
-        .orderBy(descDrizzle(reviews.createdAt)).limit(limit).offset(offset),
-      db.select({ value: countDrizzle() }).from(reviews).where(condition),
+        .orderBy(desc(reviews.createdAt)).limit(limit).offset(offset),
+      db.select({ value: count() }).from(reviews).where(condition),
     ]);
     const total = Number(countResult[0]?.value ?? 0);
     return reply.send({ data: rows, total, page, limit, hasMore: offset + rows.length < total });

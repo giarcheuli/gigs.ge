@@ -4,7 +4,7 @@ import { users, userProfiles, refreshTokens, otpCodes } from '../../db/schema/in
 import { eq, and, isNull, gt } from 'drizzle-orm';
 import bcrypt from 'bcryptjs';
 import { randomBytes, createHash } from 'crypto';
-import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../../plugins/jwt.js';
+import { signAccessToken } from '../../plugins/jwt.js';
 import { requireAuth } from '../../plugins/auth.js';
 import {
   registerSchema,
@@ -96,7 +96,6 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     });
 
     const accessToken = signAccessToken(user.id, user.role ?? 'user');
-    signRefreshToken(user.id, familyId);
 
     reply.setCookie('refresh_token', rawToken, {
       httpOnly: true,

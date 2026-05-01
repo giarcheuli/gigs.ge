@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { db } from '../../db/index.js';
 import { messages } from '../../db/schema/index.js';
-import { eq, and, or, desc, count } from 'drizzle-orm';
+import { eq, and, desc, count } from 'drizzle-orm';
 import { requireAuth } from '../../plugins/auth.js';
 import { sendMessageSchema, paginationSchema } from '@gigs/shared';
 
@@ -84,6 +84,3 @@ export async function messageRoutes(app: FastifyInstance): Promise<void> {
     return reply.send(updated);
   });
 }
-
-// Suppress unused import warning
-void or;
