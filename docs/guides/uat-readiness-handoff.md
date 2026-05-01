@@ -9,7 +9,7 @@
 
 | ✅ Done | ❌ Not started |
 |---------|---------------|
-| 19-table Drizzle schema (`apps/api/src/db/schema/`) | All API routes |
+| 21-table Drizzle schema (`apps/api/src/db/schema/`) | All API routes |
 | `packages/shared` — constants, types, Zod schemas | Auth guards (`requireAuth`, `requireVerified`, `requireAdmin`) |
 | Fastify factory — CORS, cookie, helmet, rate-limit, `/health` | Geography handlers |
 | Geographic seed — 11 regions, ~44 cities (idempotent) | Gig / Application / Contract handlers |

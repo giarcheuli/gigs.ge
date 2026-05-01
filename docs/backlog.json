@@ -10,7 +10,7 @@
       "items": [
         { "id": "INF-1", "title": "Turborepo + pnpm monorepo", "status": "done" },
         { "id": "INF-2", "title": "Fastify app factory (cors, cookie, helmet, rate-limit, error handler)", "status": "done" },
-        { "id": "INF-3", "title": "Database schema — all 19 Drizzle tables", "status": "done" },
+        { "id": "INF-3", "title": "Database schema — all 21 Drizzle tables + Drizzle relations", "status": "done" },
         { "id": "INF-4", "title": "packages/shared — constants, types, Zod schemas", "status": "done" },
         { "id": "INF-5", "title": "Geographic seed — 11 regions, ~44 cities", "status": "done" },
         { "id": "INF-6", "title": "Environment config (apps/api/src/config/env.ts)", "status": "done" },
