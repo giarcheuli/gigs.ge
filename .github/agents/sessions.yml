@@ -1,0 +1,223 @@
+# Agent Session Configuration
+# This file defines session parameters for custom AI agents in the gigs.ge repository
+
+version: "1.0"
+
+# Global session settings
+session_defaults:
+  # Maximum context window for agent memory
+  max_context_tokens: 8000
+  
+  # Session timeout (in minutes)
+  timeout: 30
+  
+  # Enable agent memory across invocations
+  persistent_memory: false
+  
+  # Default tools available to all agents
+  default_tools:
+    - read
+    - search
+    - edit
+    - execute
+    - todo
+
+# Agent-specific session configurations
+agents:
+  
+  delivery-orchestrator:
+    session_id: delivery-orchestrator
+    description: "Turn broad goals into an executable delivery path"
+    
+    # Tools specific to this agent
+    tools:
+      - read
+      - search
+      - edit
+      - execute
+      - todo
+      - agent  # Can invoke other agents
+    
+    # Documents this agent should prioritize
+    priority_docs:
+      - SYSTEM_DESIGN.md
+      - docs/backlog.json
+      - docs/guides/uat-readiness-handoff.md
+      - README.md
+    
+    # Session parameters
+    session_params:
+      focus: "planning and prioritization"
+      output_style: "structured with clear next actions"
+      decision_mode: "evidence-based from docs and code"
+    
+    # Constraints
+    constraints:
+      - "DO NOT assume domain rules without reading docs"
+      - "DO NOT optimize for feature count over narrow delivery path"
+      - "DO NOT treat planned work as implemented"
+
+  backend-workflow-builder:
+    session_id: backend-workflow-builder
+    description: "Implement the smallest backend workflow"
+    
+    tools:
+      - read
+      - search
+      - edit
+      - execute
+      - todo
+    
+    priority_docs:
+      - SYSTEM_DESIGN.md
+      - docs/architecture/auth-flow.md
+      - docs/architecture/database-design.md
+      - docs/backlog.json
+    
+    session_params:
+      focus: "backend implementation"
+      output_style: "working code with tests"
+      scope: "narrow working slices"
+    
+    constraints:
+      - "DO NOT invent business rules unsupported by docs"
+      - "DO NOT stop at schemas or stubs"
+      - "DO NOT widen scope beyond smallest slice"
+    
+    # File patterns this agent commonly works with
+    file_patterns:
+      - "apps/api/src/**/*.ts"
+      - "packages/shared/src/**/*.ts"
+      - "apps/api/src/db/**/*.ts"
+
+  test-strategy-agent:
+    session_id: test-strategy-agent
+    description: "Build the cheapest verification for important behavior"
+    
+    tools:
+      - read
+      - search
+      - edit
+      - execute
+      - todo
+    
+    priority_docs:
+      - SYSTEM_DESIGN.md
+      - docs/backlog.json
+      - docs/jest-setup.md
+      - docs/guides/uat-readiness-handoff.md
+    
+    session_params:
+      focus: "test coverage and validation"
+      output_style: "working tests with rationale"
+      test_philosophy: "cheapest test that falsifies behavior"
+    
+    constraints:
+      - "DO NOT add expensive tests when narrow check suffices"
+      - "DO NOT mirror implementation details"
+      - "DO NOT mutate production code for test convenience"
+    
+    file_patterns:
+      - "**/*.test.ts"
+      - "**/*.spec.ts"
+      - "**/tests/**/*.ts"
+
+  documentation-handoff-agent:
+    session_id: documentation-handoff-agent
+    description: "Keep documentation synchronized with implementation"
+    
+    tools:
+      - read
+      - search
+      - edit
+      - todo
+    
+    priority_docs:
+      - docs/guides/uat-readiness-handoff.md
+      - docs/backlog.json
+      - README.md
+      - docs/jest-setup.md
+    
+    session_params:
+      focus: "documentation accuracy"
+      output_style: "clear atomic documents"
+      tone: "educational yet professional"
+    
+    constraints:
+      - "DO NOT document aspirational behavior as implemented"
+      - "DO NOT leave status ambiguous"
+      - "DO NOT produce catch-all docs when atomic doc suffices"
+    
+    file_patterns:
+      - "docs/**/*.md"
+      - "*.md"
+      - "apps/*/README.md"
+
+# Repository context
+repository:
+  name: "gigs.ge"
+  owner: "giarcheuli"
+  primary_language: "TypeScript"
+  
+  # Key directories
+  structure:
+    backend: "apps/api"
+    frontend_user: "apps/web"
+    frontend_admin: "apps/admin"
+    shared: "packages/shared"
+    docs: "docs"
+  
+  # Tech stack context for agents
+  stack:
+    backend: "Fastify + Drizzle ORM + PostgreSQL"
+    frontend: "Next.js 14 + Tailwind + TanStack Query"
+    monorepo: "Turborepo + pnpm"
+    testing: "Jest + Vitest"
+
+# Session lifecycle hooks
+lifecycle:
+  on_session_start:
+    - "Read priority_docs for this agent"
+    - "Identify current project state from handoff docs"
+    - "Acknowledge user request and restate objective"
+  
+  on_session_end:
+    - "Summarize work completed"
+    - "List remaining tasks or gaps"
+    - "Update relevant documentation if needed"
+  
+  on_agent_invocation:
+    - "Load agent-specific constraints"
+    - "Set focus based on session_params"
+    - "Apply file_patterns for context"
+
+# Quality gates
+quality_gates:
+  backend_work:
+    - "Code compiles without errors"
+    - "Tests added for new behavior"
+    - "No new linting errors"
+    - "Business rules match SYSTEM_DESIGN.md"
+  
+  test_work:
+    - "Tests are green"
+    - "Coverage increased for target behavior"
+    - "Test level justified in comments"
+  
+  documentation_work:
+    - "No aspirational claims"
+    - "Cross-references updated"
+    - "Tone matches project guidelines"
+    - "Status accurately reflects code"
+
+# Handoff protocol
+handoff:
+  between_agents:
+    - "Previous agent summarizes deliverables"
+    - "Next agent acknowledges context"
+    - "Shared state captured in docs, not agent memory"
+  
+  to_human:
+    - "Clear output format per agent type"
+    - "Explicit list of what's done vs. what's next"
+    - "Risks and blockers surfaced prominently"
