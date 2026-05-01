@@ -8,6 +8,7 @@ A minimalistic, mobile-first gig board for Georgia — post short-term jobs or a
 - [**UAT Readiness Handoff**](./docs/guides/uat-readiness-handoff.md) — current implementation state, UAT blockers, and the fastest credible path forward.
 - [**Custom AI Agents**](./docs/guides/custom-ai-agents.md) — proposed workspace agents for UAT orchestration, backend delivery, testing, frontend slices, documentation, and release risk review.
 - [**Agent Skills Map**](./docs/guides/agent-skills-map.md) — which project documents each active agent should consult first.
+- [**Agent Sessions Quick Start**](./.github/agents/QUICKSTART.md) — how to invoke and use custom agents with session management.
 
 ## Overview
 
