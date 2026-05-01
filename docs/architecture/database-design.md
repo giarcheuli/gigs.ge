@@ -27,11 +27,11 @@ apps/api/src/db/schema/
 
 ## Table Map
 
-19 tables across 7 domains:
+21 tables across 7 domains:
 
 | Domain | Tables | Purpose |
 |--------|--------|---------|
-| **Identity** | `users`, `user_profiles`, `otp_codes` | Auth, PII, verification |
+| **Identity** | `users`, `user_profiles`, `otp_codes`, `refresh_tokens` | Auth, PII, verification, token families |
 | **Geography** | `regions`, `cities` | Georgian მხარე taxonomy (seeded) |
 | **Gigs** | `gigs`, `gig_images` | Job listings with per-field visibility |
 | **Applications** | `applications`, `application_attachments` | Worker applies for a gig |

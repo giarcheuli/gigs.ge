@@ -30,7 +30,7 @@ gigs.ge/
 │   └── shared/           # @gigs/shared
 │       └── src/
 │           ├── constants/ # Enums, fee rates, timing, limits
-│           ├── types/     # TypeScript interfaces (all 19 tables)
+│           ├── types/     # TypeScript interfaces (all 21 tables)
 │           └── schemas/   # Zod validation schemas
 ├── docs/                 # Architecture docs & guides
 ├── .github/              # Copilot instructions + skills
