@@ -390,7 +390,7 @@ export async function authRoutes(app: FastifyInstance) {
     const body = resetPasswordSchema.parse(request.body);
 
     // Find the OTP record matching this token
-    const tokenHash = crypto.createHash('sha256').update(body.token).digest('hex');
+    const tokenHash = await hashOtp(body.token);
 
     const otp = await db.query.otpCodes.findFirst({
       where: and(
