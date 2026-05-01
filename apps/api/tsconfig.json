@@ -15,8 +15,8 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "paths": {
-      "@gigs/shared": ["../../packages/shared/src"],
-      "@gigs/shared/*": ["../../packages/shared/src/*"]
+      "@gigs/shared": ["../../packages/shared/dist"],
+      "@gigs/shared/*": ["../../packages/shared/dist/*"]
     }
   },
   "include": ["src"],

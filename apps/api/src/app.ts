@@ -4,6 +4,14 @@ import cookie from '@fastify/cookie';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import { env } from './config/env.js';
+import { authRoutes } from './routes/auth/index.js';
+import { userRoutes } from './routes/users/index.js';
+import { gigRoutes } from './routes/gigs/index.js';
+import { applicationRoutes } from './routes/applications/index.js';
+import { contractRoutes } from './routes/contracts/index.js';
+import { notificationRoutes } from './routes/notifications/index.js';
+import { messageRoutes } from './routes/messages/index.js';
+import { adminRoutes } from './routes/admin/index.js';
 
 export async function buildApp() {
   const app = Fastify({
@@ -48,14 +56,14 @@ export async function buildApp() {
   app.get('/health', async () => ({ status: 'ok', timestamp: new Date().toISOString() }));
 
   // ── API Routes ──
-  // Routes will be registered here as they are built:
-  // await app.register(authRoutes, { prefix: '/api/v1/auth' });
-  // await app.register(userRoutes, { prefix: '/api/v1/users' });
-  // await app.register(gigRoutes, { prefix: '/api/v1/gigs' });
-  // await app.register(contractRoutes, { prefix: '/api/v1/contracts' });
-  // await app.register(notificationRoutes, { prefix: '/api/v1/notifications' });
-  // await app.register(messageRoutes, { prefix: '/api/v1/messages' });
-  // await app.register(adminRoutes, { prefix: '/api/v1/admin' });
+  await app.register(authRoutes, { prefix: '/api/v1/auth' });
+  await app.register(userRoutes, { prefix: '/api/v1/users' });
+  await app.register(gigRoutes, { prefix: '/api/v1/gigs' });
+  await app.register(applicationRoutes, { prefix: '/api/v1' });
+  await app.register(contractRoutes, { prefix: '/api/v1/contracts' });
+  await app.register(notificationRoutes, { prefix: '/api/v1/notifications' });
+  await app.register(messageRoutes, { prefix: '/api/v1/messages' });
+  await app.register(adminRoutes, { prefix: '/api/v1/admin' });
 
   return app;
 }
