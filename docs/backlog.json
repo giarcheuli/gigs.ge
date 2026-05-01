@@ -1,0 +1,224 @@
+{
+  "meta": {
+    "updatedAt": "2026-05-01",
+    "goal": "Reach a narrow but credible stakeholder UAT as soon as possible.",
+    "repoState": "early_implementation",
+    "summary": "Backend auth is the only mounted API domain with unit and request-level integration tests. Shared schema and database structure are broad, but web and admin are still placeholder UIs and the main business routes are not mounted yet."
+  },
+  "uatCriticalPath": [
+    {
+      "order": 1,
+      "task": "Finish auth workflow coverage and harden the verified-user path.",
+      "status": "in_progress"
+    },
+    {
+      "order": 2,
+      "task": "Implement and mount gigs, applications, and contract happy-path API routes.",
+      "status": "not_started"
+    },
+    {
+      "order": 3,
+      "task": "Replace placeholder web/admin pages with minimal UAT-ready user flows.",
+      "status": "not_started"
+    },
+    {
+      "order": 4,
+      "task": "Prepare stakeholder-facing docs, smoke checks, and a repeatable UAT environment.",
+      "status": "not_started"
+    }
+  ],
+  "engineering": [
+    {
+      "task": "Expand unit test coverage for backend API routes (e.g., auth, gigs, contracts).",
+      "priority": "high",
+      "status": "done",
+      "phase": "uat_foundation"
+    },
+    {
+      "task": "Write integration tests for critical workflows (e.g., user authentication, gig posting, contract lifecycle).",
+      "priority": "high",
+      "status": "in_progress",
+      "phase": "uat_critical"
+    },
+    {
+      "task": "Add end-to-end tests for user flows (e.g., gig poster creating a gig, worker applying, contract completion).",
+      "priority": "high",
+      "status": "not_started",
+      "phase": "uat_critical"
+    },
+    {
+      "task": "Test edge cases for token expiration, invalid inputs, and concurrency.",
+      "priority": "medium",
+      "status": "not_started",
+      "phase": "uat_hardening"
+    },
+    {
+      "task": "Finalize and test Cloudflare R2 integration for file uploads (e.g., gig images, user avatars, dispute evidence).",
+      "priority": "medium",
+      "status": "not_started",
+      "phase": "uat_scope_dependent"
+    },
+    {
+      "task": "Validate EXIF stripping and MIME type checks for uploaded files.",
+      "priority": "medium",
+      "status": "not_started",
+      "phase": "uat_scope_dependent"
+    },
+    {
+      "task": "Conduct load testing for the Fastify API to ensure scalability.",
+      "priority": "low",
+      "status": "not_started",
+      "phase": "post_uat"
+    },
+    {
+      "task": "Optimize database queries (e.g., Drizzle ORM) for high-traffic scenarios.",
+      "priority": "medium",
+      "status": "not_started",
+      "phase": "uat_hardening"
+    },
+    {
+      "task": "Test frontend performance for mobile-first responsiveness.",
+      "priority": "medium",
+      "status": "not_started",
+      "phase": "uat_hardening"
+    },
+    {
+      "task": "Standardize error responses across all API routes.",
+      "priority": "high",
+      "status": "not_started",
+      "phase": "uat_critical"
+    },
+    {
+      "task": "Implement logging for critical errors (e.g., token verification failures).",
+      "priority": "medium",
+      "status": "not_started",
+      "phase": "uat_hardening"
+    },
+    {
+      "task": "Add backend hooks to log user actions (e.g., gig creation, contract updates).",
+      "priority": "low",
+      "status": "not_started",
+      "phase": "post_uat"
+    },
+    {
+      "task": "Integrate a frontend analytics tool (e.g., Google Analytics, PostHog).",
+      "priority": "low",
+      "status": "not_started",
+      "phase": "post_uat"
+    }
+  ],
+  "business": [
+    {
+      "task": "Create step-by-step guides for gig posters and workers (e.g., how to post a gig, how to apply for gigs).",
+      "priority": "high",
+      "status": "not_started",
+      "phase": "uat_critical"
+    },
+    {
+      "task": "Develop a FAQ section addressing common user concerns.",
+      "priority": "high",
+      "status": "not_started",
+      "phase": "uat_critical"
+    },
+    {
+      "task": "Define a go-to-market plan (e.g., target audience segmentation, social media campaigns).",
+      "priority": "low",
+      "status": "not_started",
+      "phase": "post_uat"
+    },
+    {
+      "task": "Create marketing assets (e.g., explainer videos, blog posts highlighting unique features).",
+      "priority": "low",
+      "status": "not_started",
+      "phase": "post_uat"
+    },
+    {
+      "task": "Develop educational content on the fee structure and dispute resolution process.",
+      "priority": "medium",
+      "status": "not_started",
+      "phase": "uat_hardening"
+    },
+    {
+      "task": "Host webinars or Q&A sessions for early adopters.",
+      "priority": "low",
+      "status": "not_started",
+      "phase": "post_uat"
+    }
+  ],
+  "product": [
+    {
+      "task": "Finalize user-facing documentation (e.g., platform overview, contract lifecycle explanation, dispute resolution flow).",
+      "priority": "high",
+      "status": "not_started",
+      "phase": "uat_critical"
+    },
+    {
+      "task": "Add developer documentation for API usage.",
+      "priority": "medium",
+      "status": "not_started",
+      "phase": "uat_hardening"
+    },
+    {
+      "task": "Address remaining usability issues (e.g., simplify navigation, ensure mobile-first design is polished).",
+      "priority": "high",
+      "status": "not_started",
+      "phase": "uat_critical"
+    },
+    {
+      "task": "Conduct user testing to gather feedback on the interface.",
+      "priority": "high",
+      "status": "not_started",
+      "phase": "uat_critical"
+    },
+    {
+      "task": "Implement notifications for key events (e.g., contract updates, dispute resolution progress).",
+      "priority": "medium",
+      "status": "not_started",
+      "phase": "uat_scope_dependent"
+    },
+    {
+      "task": "Add search and filtering options for gigs.",
+      "priority": "medium",
+      "status": "not_started",
+      "phase": "uat_scope_dependent"
+    },
+    {
+      "task": "Build an admin dashboard to track user activity, revenue metrics, and dispute resolution statistics.",
+      "priority": "low",
+      "status": "not_started",
+      "phase": "post_uat"
+    }
+  ],
+  "marketing": [
+    {
+      "task": "Create a brand identity (e.g., logo, color scheme, typography).",
+      "priority": "low",
+      "status": "not_started",
+      "phase": "post_uat"
+    },
+    {
+      "task": "Build a landing page highlighting the platform’s value proposition.",
+      "priority": "medium",
+      "status": "not_started",
+      "phase": "uat_scope_dependent"
+    },
+    {
+      "task": "Launch a community forum for gig posters and workers.",
+      "priority": "low",
+      "status": "not_started",
+      "phase": "post_uat"
+    },
+    {
+      "task": "Partner with local influencers or organizations to promote the platform.",
+      "priority": "low",
+      "status": "not_started",
+      "phase": "post_uat"
+    },
+    {
+      "task": "Set up feedback loops (e.g., surveys for early adopters, in-app feedback forms).",
+      "priority": "medium",
+      "status": "not_started",
+      "phase": "uat_hardening"
+    }
+  ]
+}

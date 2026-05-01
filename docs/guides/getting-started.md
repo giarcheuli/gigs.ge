@@ -114,7 +114,8 @@ After setup, read:
 - [Monorepo Structure](../architecture/monorepo-structure.md) — why Turborepo + pnpm
 - [Database Design](../architecture/database-design.md) — schema conventions and table map
 - [Auth Flow](../architecture/auth-flow.md) — JWT pattern and guards
+- [UAT Readiness Handoff](./uat-readiness-handoff.md) — what is implemented today, the first UAT actor journeys, and the 4-session delivery brief
 
 ---
 
-**Related:** [SYSTEM_DESIGN.md](../../SYSTEM_DESIGN.md) · [API README](../../apps/api/README.md)
+**Related:** [SYSTEM_DESIGN.md](../../SYSTEM_DESIGN.md) · [API README](../../apps/api/README.md) · [backlog.json](../backlog.json)

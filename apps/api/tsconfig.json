@@ -13,11 +13,7 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "isolatedModules": true,
-    "paths": {
-      "@gigs/shared": ["../../packages/shared/src"],
-      "@gigs/shared/*": ["../../packages/shared/src/*"]
-    }
+    "isolatedModules": true
   },
   "include": ["src"],
   "exclude": ["node_modules", "dist"]

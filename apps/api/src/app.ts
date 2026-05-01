@@ -4,6 +4,7 @@ import cookie from '@fastify/cookie';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import { env } from './config/env.js';
+import { authRoutes } from './routes/auth/index.js';
 
 export async function buildApp() {
   const app = Fastify({
@@ -48,8 +49,7 @@ export async function buildApp() {
   app.get('/health', async () => ({ status: 'ok', timestamp: new Date().toISOString() }));
 
   // ── API Routes ──
-  // Routes will be registered here as they are built:
-  // await app.register(authRoutes, { prefix: '/api/v1/auth' });
+  await app.register(authRoutes, { prefix: '/api/v1/auth' });
   // await app.register(userRoutes, { prefix: '/api/v1/users' });
   // await app.register(gigRoutes, { prefix: '/api/v1/gigs' });
   // await app.register(contractRoutes, { prefix: '/api/v1/contracts' });
