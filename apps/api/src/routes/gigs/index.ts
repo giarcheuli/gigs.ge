@@ -83,8 +83,8 @@ export async function gigRoutes(app: FastifyInstance): Promise<void> {
     }
     const [updated] = await db.update(gigs).set({
         ...parsed.data,
-        availableFrom: parsed.data.availableFrom != null ? new Date(parsed.data.availableFrom) : null,
-        availableTo: parsed.data.availableTo != null ? new Date(parsed.data.availableTo) : null,
+        availableFrom: parsed.data.availableFrom ? new Date(parsed.data.availableFrom) : null,
+        availableTo: parsed.data.availableTo ? new Date(parsed.data.availableTo) : null,
         updatedAt: new Date(),
       })
       .where(eq(gigs.id, id)).returning();

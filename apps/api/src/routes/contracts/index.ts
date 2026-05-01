@@ -156,7 +156,7 @@ export async function contractRoutes(app: FastifyInstance): Promise<void> {
 
       if (contract.feeEligible && contract.agreedPrice) {
         // Convert to cents first to avoid floating-point drift, then round fees before converting back.
-        const priceInCents = Math.round(parseFloat(contract.agreedPrice) * 100);
+        const priceInCents = Math.round(parseFloat(contract.agreedPrice || '0') * 100);
         const posterFee = (Math.round(priceInCents * POSTER_FEE_RATE) / 100).toFixed(2);
         const workerFee = (Math.round(priceInCents * WORKER_FEE_RATE) / 100).toFixed(2);
         await db.insert(billingLedger).values([
@@ -313,7 +313,7 @@ export async function contractRoutes(app: FastifyInstance): Promise<void> {
       if (appendix.additionalCompensation) {
         // Use cents-based arithmetic to avoid floating-point drift across multiple appendices.
         const currentCents = Math.round(parseFloat(contract.agreedPrice ?? '0') * 100);
-        const additionalCents = Math.round(parseFloat(appendix.additionalCompensation) * 100);
+        const additionalCents = Math.round(parseFloat(appendix.additionalCompensation ?? '0') * 100);
         contractUpdate['agreedPrice'] = ((currentCents + additionalCents) / 100).toFixed(2);
       }
       if (appendix.newDueAt) contractUpdate['dueAt'] = appendix.newDueAt;

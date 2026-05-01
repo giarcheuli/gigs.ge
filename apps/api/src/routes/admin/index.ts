@@ -9,6 +9,7 @@ import {
   adminMarkInvoicePaidSchema,
   paginationSchema,
 } from '@gigs/shared';
+import { GIG_STATUSES, FLAG_STATUSES } from '@gigs/shared/constants';
 
 export async function adminRoutes(app: FastifyInstance): Promise<void> {
   // GET /users
@@ -81,6 +82,9 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     const { id } = request.params as { id: string };
     const body = request.body as { status?: string };
     if (!body.status) return reply.status(400).send({ error: 'status is required', statusCode: 400 });
+    if (!(GIG_STATUSES as readonly string[]).includes(body.status)) {
+      return reply.status(400).send({ error: `Invalid gig status. Must be one of: ${GIG_STATUSES.join(', ')}`, statusCode: 400 });
+    }
     const [updated] = await db.update(gigs)
       .set({ status: body.status as typeof gigs.$inferInsert['status'], updatedAt: new Date() })
       .where(eq(gigs.id, id)).returning();
@@ -162,6 +166,9 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     const { id } = request.params as { id: string };
     const body = request.body as { status?: string };
     if (!body.status) return reply.status(400).send({ error: 'status is required', statusCode: 400 });
+    if (!(FLAG_STATUSES as readonly string[]).includes(body.status)) {
+      return reply.status(400).send({ error: `Invalid flag status. Must be one of: ${FLAG_STATUSES.join(', ')}`, statusCode: 400 });
+    }
     const [updated] = await db.update(gigFlags)
       .set({ status: body.status, reviewedAt: new Date(), reviewedBy: request.user.id })
       .where(eq(gigFlags.id, id)).returning();
