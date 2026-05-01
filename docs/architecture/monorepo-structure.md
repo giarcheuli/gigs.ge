@@ -7,7 +7,7 @@ For **gigs.ge**, we use a monorepo managed by **Turborepo** and **pnpm**.
 In a marketplace with separate interfaces (User-facing vs. Admin), a monorepo provides three key advantages:
 
 1. **Shared Domain Logic**: The 3%/2% fee constants, contract status enums, half-time rule formula, and Zod validation schemas are written once in `packages/shared` and used by both the API and the frontends.
-2. **Type Safety**: TypeScript interfaces for all 19 database tables are shared across the entire stack — a schema change in `shared` breaks the build immediately if consumers aren't updated.
+2. **Type Safety**: TypeScript interfaces for all 21 database tables are shared across the entire stack — a schema change in `shared` breaks the build immediately if consumers aren't updated.
 3. **Simplified Orchestration**: `pnpm dev` starts the backend, the website, and the admin panel simultaneously via Turborepo.
 
 ## Folder Overview

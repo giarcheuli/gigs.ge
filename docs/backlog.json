@@ -3,23 +3,23 @@
     "updatedAt": "2026-05-01",
     "goal": "Reach a narrow but credible stakeholder UAT as soon as possible.",
     "repoState": "early_implementation",
-    "summary": "Backend auth is the only mounted API domain with unit and request-level integration tests. Shared schema and database structure are broad, but web and admin are still placeholder UIs and the main business routes are not mounted yet."
+    "summary": "Backend auth, gigs, applications, and contracts (minimum signing flow) are mounted with focused request-level integration tests. Shared schema and database structure are broad, while web and admin remain placeholder UIs for the core UAT journey."
   },
   "uatCriticalPath": [
     {
       "order": 1,
       "task": "Finish auth workflow coverage and harden the verified-user path.",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "order": 2,
       "task": "Implement and mount gigs, applications, and contract happy-path API routes.",
-      "status": "in_progress"
+      "status": "done"
     },
     {
       "order": 3,
       "task": "Replace placeholder web/admin pages with minimal UAT-ready user flows.",
-      "status": "not_started"
+      "status": "in_progress"
     },
     {
       "order": 4,

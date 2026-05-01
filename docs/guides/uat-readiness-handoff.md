@@ -10,16 +10,20 @@ The frontend is still far behind the backend. Both `apps/web` and `apps/admin` a
 
 ## Verified Implemented Surface
 
-1. API auth routes exist for register, login, OTP verification and resend, refresh, logout, forgot-password, reset-password, and `me`.
+1. API route groups are mounted for auth, gigs, applications, and contracts. The current happy-path coverage includes:
+   - auth: register/login/verify/resend/refresh/logout/forgot-password/reset-password/`me`
+   - gigs: create draft, update draft, publish, list visible gigs, fetch visible gig
+   - applications: apply to active gig, poster list by gig, poster accept
+   - contracts: party fetch, party sign (draft → in_progress once both sign)
 2. The database schema already covers users, profiles, gigs, applications, contracts, billing, reviews, messaging, and moderation-related tables.
 3. Automated tests now exist for auth helper logic and request-level auth flows.
 4. Regions and cities have a seed path, which helps with realistic Georgia-specific fixtures later.
 
 ## Reality Check
 
-The biggest blocker to UAT is not test count. It is missing product breadth.
+The biggest blocker to UAT is not test count. It is missing product breadth on the frontend and later-stage contract/billing flows.
 
-Right now, auth and the first gigs happy-path routes are mounted in the API, and the two frontend apps do not yet implement browse, post, apply, contract, dispute, or admin moderation flows. That means a stakeholder still cannot perform full end-to-end scenarios that define the business.
+Right now, auth + gigs + applications + contracts (minimum signing flow) are mounted in the API, but the two frontend apps still do not implement the full browse/post/apply/contract journey. That means stakeholder UAT still needs UI delivery to exercise this backend slice end-to-end.
 
 Because of that, calling the project "pre-development" is no longer accurate, but calling it "UAT-ready" would also be misleading. The honest state is early implementation with a strong schema and auth foundation.
 
@@ -30,18 +34,16 @@ For this repo, the fastest credible path is not "build every planned feature." I
 1. A verified user can register, log in, and view their account state.
 2. A poster can create and publish a gig.
 3. A worker can browse that gig and apply.
-4. The poster can move the relationship into a simple contract flow.
-5. Both sides can reach a visible terminal state that demonstrates the trust-based platform concept.
+4. The poster can accept an application and create a contract draft.
+5. Both sides can sign into `in_progress` so stakeholders can see the core hiring handoff.
 
 If that slice works in both API and UI, stakeholder UAT can begin even while deeper features stay behind it.
 
 ## Recommended Next Work
 
-1. Finish auth workflow test coverage for `refresh`, `logout`, `verify-otp`, `forgot-password`, `reset-password`, and `me`.
-2. Implement and mount the first non-auth route group: gigs.
-3. Implement the smallest application and contract happy path needed to demonstrate hiring, acceptance, and completion.
-4. Replace placeholder web pages with minimal task-focused screens for browse, register/login, post gig, apply, and view contract status.
-5. Add stakeholder-facing documentation: quickstart, UAT script, and FAQ for the trust model.
+1. Replace placeholder web/admin pages with minimal task-focused screens for browse, register/login, post gig, apply, accept, and sign.
+2. Add first contract progression beyond `in_progress` (pending completion + completion/not-done entry points) without opening full dispute/billing automation scope.
+3. Add stakeholder-facing documentation: quickstart, UAT script, and FAQ for the trust model.
 
 ## Work That Can Wait Until After First UAT
 
@@ -50,9 +52,9 @@ If that slice works in both API and UI, stakeholder UAT can begin even while dee
 3. Rich admin dashboard and community features.
 4. Marketing assets beyond the minimum needed to frame the demo.
 
-## Session Output
+## Session Output (Latest)
 
-This session established a backend test harness that respects the repo's runtime-correct ESM import style and added the first auth integration tests. That matters because it gives the next session a stable base for shipping workflow tests instead of arguing with tooling.
+The latest backend session mounted the first believable UAT API chain across auth, gigs, applications, and contracts (up to `in_progress`) with focused request-level integration tests. This keeps scope honest while unblocking frontend UAT stitching.
 
 Related notes:
 

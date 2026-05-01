@@ -18,4 +18,4 @@ A minimalistic, mobile-first gig board for Georgia — post short-term jobs or a
 
 ## Status
 
-Early implementation — backend auth and schema foundations exist, but the core stakeholder user journeys are not yet wired end-to-end. See [SYSTEM_DESIGN.md](./SYSTEM_DESIGN.md) for the target design and [docs/guides/uat-readiness-handoff.md](./docs/guides/uat-readiness-handoff.md) for the current delivery state.
+Early implementation — backend auth, gigs, applications, and contracts (minimum signing flow) are mounted, but stakeholder user journeys are not yet wired end-to-end in web/admin. See [SYSTEM_DESIGN.md](./SYSTEM_DESIGN.md) for the target design and [docs/guides/uat-readiness-handoff.md](./docs/guides/uat-readiness-handoff.md) for the current delivery state.
