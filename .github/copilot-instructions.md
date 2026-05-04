@@ -34,6 +34,14 @@ See [SYSTEM_DESIGN.md](../SYSTEM_DESIGN.md) for the full specification.
 - Atomic files: split at ~200 lines
 - Use Mermaid for state machines and flow diagrams
 
+## Branching and SDLC Rules
+- The canonical integration branch for current UAT delivery is `uat/first-slice`.
+- Do not continue feature work from stale milestone branches when a newer integration branch exists.
+- Treat `copilot/*` branches as temporary intake branches. Merge or cherry-pick useful work into the canonical integration branch quickly, then continue from the canonical branch or a fresh task branch.
+- All new feature, fix, and doc slices should branch from the canonical integration branch and merge back into it before consideration for `main`.
+- Before coding, read the branch and workflow policy in `/docs/guides/branching-and-sdlc.md` together with the current UAT handoff and backlog.
+- The first UAT slice should continue in this order: auth foundation, minimal gigs/applications/contracts backend path, frontend UAT stitching, stakeholder docs and smoke checks, then post-UAT hardening.
+
 ## Skills Reference
 Domain-specific workflows are defined in `.github/skills/`:
 

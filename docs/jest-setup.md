@@ -33,11 +33,11 @@ The API test setup now supports two levels of coverage:
 1. Unit tests for pure auth helpers such as password hashing.
 2. Request-level integration tests that call `buildApp()` and hit Fastify routes with `app.inject()`.
 
-For the first integration slice, we mock the DB boundary rather than starting a real Postgres instance. This is deliberate: it validates routing, schema parsing, cookies, auth token issuance, and response formatting without turning the test into infrastructure setup.
+For the current UAT slice, we still mock the DB boundary rather than starting a real Postgres instance. This is deliberate: it validates routing, schema parsing, cookies, auth token issuance, request guards, and response formatting without turning the suite into infrastructure setup.
 
 ## Why This Approach Fits The Repo
 
-This monorepo is still early in implementation. Only auth routes are mounted today, so the highest-value integration test is the auth HTTP surface, not an end-to-end database workflow that the rest of the repo is not ready to support yet.
+This monorepo is still early in implementation. The backend now mounts auth plus the first gigs, applications, and contracts happy-path routes, but the product is not yet ready for heavyweight database-backed end-to-end coverage. Request-level Fastify tests remain the cheapest credible proof for the current delivery stage.
 
 This gives us a stable progression:
 
