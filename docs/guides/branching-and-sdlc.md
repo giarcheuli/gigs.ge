@@ -98,6 +98,11 @@ For current frontend work, prefer:
 1. `pnpm --filter @gigs/web build`
 2. `pnpm --filter @gigs/web lint` when the repo supports it cleanly
 
+## Related Policy
+
+For PR standards, CI pipeline, CD strategy, release tagging, and the full list of forbidden
+practices, see [sdlc-and-cicd.md](./sdlc-and-cicd.md).
+
 ## Docs Ownership
 
 The repo should use these documents as the operating source of truth:
