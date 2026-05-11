@@ -5,7 +5,7 @@
 ## Prerequisites
 
 | Tool | Version | Check |
-|------|---------|-------|
+| ---- | ------- | ----- |
 | Node.js | 20 LTS | `node --version` |
 | pnpm | 8.x | `pnpm --version` |
 | PostgreSQL | 16 | `psql --version` |
@@ -65,10 +65,10 @@ pnpm dev
 This starts all three apps via Turborepo:
 
 | App | URL | Description |
-|-----|-----|-------------|
-| API | http://localhost:3001 | Fastify backend |
-| Web | http://localhost:3000 | User-facing Next.js app |
-| Admin | http://localhost:3002 | Admin dashboard |
+| --- | --- | ----------- |
+| API | `http://localhost:3001` | Fastify backend |
+| Web | `http://localhost:3000` | User-facing Next.js app |
+| Admin | `http://localhost:3002` | Admin dashboard |
 
 Health check: `curl http://localhost:3001/health`
 
@@ -82,7 +82,7 @@ Builds all packages in dependency order (`shared` → `api`, `web`, `admin`).
 
 ## Project Structure
 
-```
+```text
 gigs.ge/
 ├── apps/
 │   ├── api/          # Fastify + Drizzle ORM
@@ -99,7 +99,7 @@ gigs.ge/
 ## Useful Commands
 
 | Command | What it does |
-|---------|-------------|
+| ------- | ------------ |
 | `pnpm dev` | Start all apps in watch mode |
 | `pnpm build` | Production build (all packages) |
 | `pnpm --filter @gigs/api db:studio` | Open Drizzle Studio (DB GUI) |
@@ -111,10 +111,12 @@ gigs.ge/
 ## What's Next?
 
 After setup, read:
+
 - [Monorepo Structure](../architecture/monorepo-structure.md) — why Turborepo + pnpm
 - [Database Design](../architecture/database-design.md) — schema conventions and table map
 - [Auth Flow](../architecture/auth-flow.md) — JWT pattern and guards
+- [UAT Readiness Handoff](./uat-readiness-handoff.md) — what is implemented today, the current UAT blockers, and the next delivery priorities
 
 ---
 
-**Related:** [SYSTEM_DESIGN.md](../../SYSTEM_DESIGN.md) · [API README](../../apps/api/README.md)
+**Related:** [SYSTEM_DESIGN.md](../../SYSTEM_DESIGN.md) · [API README](../../apps/api/README.md) · [backlog.json](../backlog.json)
