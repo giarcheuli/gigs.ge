@@ -12,6 +12,7 @@
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:seed": "tsx src/db/seed.ts",
+    "db:seed:uat": "tsx src/db/seed-uat.ts",
     "db:studio": "drizzle-kit studio",
     "test": "jest",
     "test:watch": "jest --watch",
