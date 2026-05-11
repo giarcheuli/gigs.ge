@@ -1,0 +1,48 @@
+# Dependencies
+node_modules
+**/node_modules
+
+# Build outputs (rebuilt inside Docker)
+dist
+**/.next
+**/dist
+
+# pnpm cache
+.pnpm-store
+
+# Turbo cache
+.turbo
+**/.turbo
+
+# Test artefacts
+coverage
+**/coverage
+**/*.tsbuildinfo
+
+# Local env files — never bake secrets into images
+.env
+.env.*
+!.env.example
+apps/**/.env
+apps/**/.env.*
+!apps/**/.env.example
+
+# Git / editor
+.git
+.gitignore
+.vscode
+.idea
+
+# Drizzle generated migrations (applied at runtime via db:push)
+drizzle
+**/drizzle
+
+# OS artefacts
+.DS_Store
+Thumbs.db
+
+# Docs (not needed at runtime)
+docs
+*.md
+!apps/api/README.md
+!apps/web/README.md
