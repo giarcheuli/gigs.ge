@@ -41,6 +41,7 @@ uat/first-slice            ← source of truth
   - `fix/` — bug correction
   - `docs/` — documentation-only change
   - `chore/` — tooling, config, deps
+  - `refactor/` — code restructuring without behavior change
 - One branch = one smallest meaningful slice. Do not mix workstreams.
 
 ### 2. Develop
