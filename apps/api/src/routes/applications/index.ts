@@ -137,4 +137,53 @@ export async function applicationsRoutes(app: FastifyInstance) {
 
     return reply.send({ application: acceptedApplication, contract });
   });
+
+  /**
+   * GET /applications/mine
+   * Returns all applications submitted by the current user, with gig info.
+   */
+  app.get('/mine', { preHandler: [requireAuth] }, async (request, reply) => {
+    const data = await db.query.applications.findMany({
+      where: eq(applications.applicantId, request.user.sub),
+      orderBy: (table, { desc }) => [desc(table.createdAt)],
+      with: {
+        gig: true,
+        contract: true,
+      },
+    });
+
+    return reply.send({ data });
+  });
+
+  /**
+   * DELETE /applications/:id
+   * Worker withdraws their own pending application.
+   */
+  app.delete('/:id', { preHandler: [requireAuth] }, async (request, reply) => {
+    const params = applicationIdParamsSchema.parse(request.params);
+
+    const application = await db.query.applications.findFirst({
+      where: eq(applications.id, params.id),
+    });
+
+    if (!application) {
+      return reply.status(404).send({ error: 'Application not found', statusCode: 404 });
+    }
+
+    if (application.applicantId !== request.user.sub) {
+      return reply.status(403).send({ error: 'You can only withdraw your own applications', statusCode: 403 });
+    }
+
+    if (application.status !== 'pending') {
+      return reply.status(409).send({ error: 'Only pending applications can be withdrawn', statusCode: 409 });
+    }
+
+    const [updated] = await db
+      .update(applications)
+      .set({ status: 'withdrawn', updatedAt: new Date() })
+      .where(eq(applications.id, params.id))
+      .returning();
+
+    return reply.send({ application: updated });
+  });
 }
