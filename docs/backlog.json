@@ -1,9 +1,9 @@
 {
   "meta": {
-    "updatedAt": "2026-05-01",
+    "updatedAt": "2026-05-11",
     "goal": "Reach a narrow but credible stakeholder UAT as soon as possible.",
-    "repoState": "early_implementation",
-    "summary": "Backend auth, gigs, applications, and contracts (minimum signing flow) are mounted with focused request-level integration tests. Shared schema and database structure are broad, while web and admin remain placeholder UIs for the core UAT journey."
+    "repoState": "uat_ready_pending_env",
+    "summary": "Full UAT happy path is implemented end-to-end: auth, gig board (browse/post/view/apply), contract lifecycle (sign/complete/dispute/cancel/quit), account dashboard, UAT seed. Frontend has 11 routes. Only missing pieces before stakeholder UAT: environment setup, integration tests for new contract actions, and a UAT runbook."
   },
   "uatCriticalPath": [
     {
@@ -19,12 +19,15 @@
     {
       "order": 3,
       "task": "Replace placeholder web/admin pages with minimal UAT-ready user flows.",
-      "status": "in_progress"
+      "status": "done",
+      "completedAt": "2026-05-11",
+      "notes": "11 routes: /, /register, /login, /verify, /account, /gigs, /gigs/new, /gigs/[id], /contracts/[id], and supporting lib. UAT seed provides 3 pre-verified accounts."
     },
     {
       "order": 4,
       "task": "Prepare stakeholder-facing docs, smoke checks, and a repeatable UAT environment.",
-      "status": "not_started"
+      "status": "in_progress",
+      "notes": "UAT runbook being written. Smoke checks TBD."
     }
   ],
   "engineering": [
@@ -38,7 +41,8 @@
       "task": "Write integration tests for critical workflows (e.g., user authentication, gig posting, contract lifecycle).",
       "priority": "high",
       "status": "in_progress",
-      "phase": "uat_critical"
+      "phase": "uat_critical",
+      "notes": "Auth, gig, application, and contract sign/fetch tests exist (37 passing). Contract actions mark-complete/dispute/cancel/quit need coverage."
     },
     {
       "task": "Add end-to-end tests for user flows (e.g., gig poster creating a gig, worker applying, contract completion).",
@@ -85,8 +89,9 @@
     {
       "task": "Standardize error responses across all API routes.",
       "priority": "high",
-      "status": "not_started",
-      "phase": "uat_critical"
+      "status": "in_progress",
+      "phase": "uat_critical",
+      "notes": "All routes use { error, statusCode } shape. Zod parse errors bubble via Fastify error handler. Minor shape inconsistency: some endpoints return nested error details, others do not."
     },
     {
       "task": "Implement logging for critical errors (e.g., token verification failures).",
