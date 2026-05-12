@@ -112,7 +112,7 @@ info "4/6  GET /auth/me"
 if [[ -n "$ACCESS_TOKEN" && "$ACCESS_TOKEN" != "null" ]]; then
   ME_BODY=$(curl -sf "$API_BASE/api/v1/auth/me" \
     -H "Authorization: Bearer $ACCESS_TOKEN" 2>/dev/null || echo "")
-  ME_EMAIL=$(echo "$ME_BODY" | jq -r '.email // empty' 2>/dev/null || echo "")
+  ME_EMAIL=$(echo "$ME_BODY" | jq -r '.user.email // .email // empty' 2>/dev/null || echo "")
   if [[ "$ME_EMAIL" == "poster1@uat.gigs.ge" ]]; then
     pass "GET /api/v1/auth/me → email matches seeded account"
   else
