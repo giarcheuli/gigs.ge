@@ -1,25 +1,18 @@
 'use client';
 
 /**
- * Auth context for apps/web.
+ * Auth context — keeps the current user in React state across the whole app.
  *
- * Stores the access token in React state (in-memory — cleared on reload).
- * On mount, attempts a silent token refresh so the user stays logged in
- * across page reloads as long as their httpOnly refresh_token cookie is valid.
+ * On mount, AuthProvider attempts a silent token refresh so that a page reload
+ * does not log the user out (the refresh token lives in an httpOnly cookie).
  *
- * The access token module (lib/api.ts) is kept in sync so the apiFetch
- * wrapper always has the latest token without needing the React context.
+ * login()  — called after a successful register or login API response.
+ * logout() — calls the logout endpoint, clears state.
+ * refreshUser() — re-fetches /auth/me to pick up profile changes.
  */
 
-import {
-  createContext,
-  useContext,
-  useState,
-  useEffect,
-  useCallback,
-  type ReactNode,
-} from 'react';
-import { setAccessToken, silentRefresh } from '@/lib/api';
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { setAccessToken, silentRefresh, apiFetch } from './api';
 
 export interface AuthUser {
   id: string;
@@ -29,106 +22,71 @@ export interface AuthUser {
   status: string;
   emailVerified: boolean;
   phoneVerified: boolean;
-  dateOfBirth: string;
+  dateOfBirth: string | null;
   createdAt: string;
 }
 
-interface AuthContextValue {
+interface AuthState {
   user: AuthUser | null;
-  accessToken: string | null;
-  /** true while the initial silent-refresh check is in progress */
   loading: boolean;
   login: (token: string, user: AuthUser) => void;
   logout: () => Promise<void>;
-  /** Re-fetch /auth/me and update the user object (e.g. after OTP verification) */
   refreshUser: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextValue | null>(null);
-
-const BASE = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001').replace(/\/$/, '');
+const AuthContext = createContext<AuthState | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
-  const [accessToken, _setAccessToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  /** Sync both React state and the module-level variable in one call. */
-  const applyToken = useCallback((token: string | null) => {
-    setAccessToken(token);
-    _setAccessToken(token);
-  }, []);
-
-  const fetchMe = useCallback(async (token: string): Promise<AuthUser | null> => {
-    try {
-      const res = await fetch(`${BASE}/api/v1/auth/me`, {
-        headers: { Authorization: `Bearer ${token}` },
-        credentials: 'include',
-      });
-      if (res.ok) {
-        const data = (await res.json()) as { user: AuthUser };
-        return data.user;
-      }
-    } catch {
-      // network error
-    }
-    return null;
-  }, []);
-
-  // Attempt silent refresh on mount to restore session after page reload.
   useEffect(() => {
-    (async () => {
-      const refreshed = await silentRefresh();
-      if (refreshed) {
-        const { getAccessToken } = await import('@/lib/api');
-        const token = getAccessToken();
-        if (token) {
-          applyToken(token);
-          const me = await fetchMe(token);
-          setUser(me);
+    // Attempt silent refresh on every page load. If it fails the user is
+    // simply unauthenticated — no redirect here (pages handle that).
+    silentRefresh()
+      .then(async (token) => {
+        if (!token) return;
+        const res = await apiFetch('/auth/me');
+        if (res.ok) {
+          const body = (await res.json()) as { user: AuthUser };
+          setUser(body.user);
         }
-      }
-      setLoading(false);
-    })();
-  }, [applyToken, fetchMe]);
+      })
+      .finally(() => setLoading(false));
+  }, []);
 
-  const login = useCallback(
-    (token: string, userObj: AuthUser) => {
-      applyToken(token);
-      setUser(userObj);
-    },
-    [applyToken],
-  );
+  function login(token: string, newUser: AuthUser) {
+    setAccessToken(token);
+    setUser(newUser);
+  }
 
-  const logout = useCallback(async () => {
+  async function logout() {
     try {
-      await fetch(`${BASE}/api/v1/auth/logout`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
-      });
+      await apiFetch('/auth/logout', { method: 'POST' });
     } catch {
-      // ignore — clear state regardless
+      // ignore network errors on logout
     }
-    applyToken(null);
+    setAccessToken(null);
     setUser(null);
-  }, [accessToken, applyToken]);
+  }
 
-  const refreshUser = useCallback(async () => {
-    if (!accessToken) return;
-    const me = await fetchMe(accessToken);
-    if (me) setUser(me);
-  }, [accessToken, fetchMe]);
+  async function refreshUser() {
+    const res = await apiFetch('/auth/me');
+    if (res.ok) {
+      const body = (await res.json()) as { user: AuthUser };
+      setUser(body.user);
+    }
+  }
 
   return (
-    <AuthContext.Provider value={{ user, accessToken, loading, login, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );
 }
 
-export function useAuth(): AuthContextValue {
+export function useAuth(): AuthState {
   const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be used within AuthProvider');
+  if (!ctx) throw new Error('useAuth must be used inside <AuthProvider>');
   return ctx;
 }

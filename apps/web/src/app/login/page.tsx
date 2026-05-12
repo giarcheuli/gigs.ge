@@ -3,11 +3,8 @@
 /**
  * /login — Returning user authentication.
  *
- * On success: stores the access token in auth context and navigates to
- * /account (or to the ?next= query param if present).
- *
- * useSearchParams requires a Suspense boundary in Next.js 14 — the form
- * is extracted into a child component so the page shell can wrap it.
+ * useSearchParams requires a Suspense boundary in Next.js 14 App Router.
+ * The form is extracted into LoginForm; the page shell wraps it in <Suspense>.
  */
 
 import { Suspense, useState } from 'react';
@@ -19,6 +16,7 @@ import { loginSchema } from '@gigs/shared/schemas';
 import { z } from 'zod';
 import { useAuth } from '@/lib/auth-context';
 import type { AuthUser } from '@/lib/auth-context';
+import { setAccessToken } from '@/lib/api';
 
 type FormData = z.infer<typeof loginSchema>;
 
@@ -56,19 +54,20 @@ function LoginForm() {
       };
 
       if (!res.ok) {
-        setServerError(body.error ?? 'Invalid email or password');
+        setServerError(body.error ?? 'Invalid email or password.');
         return;
       }
 
       if (body.accessToken && body.user) {
+        setAccessToken(body.accessToken);
         login(body.accessToken, body.user);
-        // Only follow ?next= for same-origin relative paths to prevent open redirects.
+        // Only follow ?next= for same-origin relative paths (open-redirect protection).
         const next = searchParams.get('next');
         const safeDest = next && next.startsWith('/') ? next : '/account';
         router.push(safeDest);
       }
     } catch {
-      setServerError('Network error. Please check your connection and try again.');
+      setServerError('Network error. Please check your connection.');
     } finally {
       setIsSubmitting(false);
     }
@@ -88,7 +87,7 @@ function LoginForm() {
           {...register('email')}
           type="email"
           autoComplete="email"
-          className={inputClass(!!errors.email)}
+          className={inputCls(!!errors.email)}
         />
         {errors.email && (
           <p role="alert" className="text-xs text-red-600">
@@ -103,7 +102,7 @@ function LoginForm() {
           {...register('password')}
           type="password"
           autoComplete="current-password"
-          className={inputClass(!!errors.password)}
+          className={inputCls(!!errors.password)}
         />
         {errors.password && (
           <p role="alert" className="text-xs text-red-600">
@@ -134,7 +133,6 @@ export default function LoginPage() {
             Create account
           </Link>
         </p>
-
         <Suspense fallback={null}>
           <LoginForm />
         </Suspense>
@@ -143,7 +141,7 @@ export default function LoginPage() {
   );
 }
 
-function inputClass(hasError: boolean) {
+function inputCls(hasError: boolean) {
   return [
     'rounded-md border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-500',
     hasError ? 'border-red-400 focus:ring-red-400' : 'border-gray-300',

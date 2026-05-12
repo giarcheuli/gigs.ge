@@ -1,99 +1,86 @@
 /**
- * UAT seed — pre-verified accounts for stakeholder walkthroughs.
+ * UAT seed — inserts 3 pre-verified test accounts for stakeholder UAT.
  *
- * Inserts three accounts (1 poster, 2 workers) that are already email-verified
- * so reviewers can sign in directly without going through registration or OTP entry.
+ * Idempotent: uses onConflictDoNothing so re-running is safe.
+ * Refuses to run in NODE_ENV=production.
  *
- * Safety rules:
- *   - Idempotent: onConflictDoNothing so double-running is harmless.
- *   - Dev/UAT only: refuses to run in production.
+ * Accounts:
+ *   poster1@uat.gigs.ge  — posts gigs
+ *   worker1@uat.gigs.ge  — applies as worker (scenario A)
+ *   worker2@uat.gigs.ge  — applies as worker (scenario B)
  *
- * Credentials are documented in docs/guides/uat-test-accounts.md.
- *
- * Run with: pnpm --filter @gigs/api db:seed:uat
+ * Password for all: Uat-Demo-2026!
  */
 
+import bcrypt from 'bcryptjs';
 import { db } from './index.js';
-import { users, userProfiles } from './schema/index.js';
-import { eq } from 'drizzle-orm';
-import { hashPassword } from '../lib/auth.js';
+import { users } from './schema/users.js';
+import { userProfiles } from './schema/profiles.js';
 
-const UAT_PASSWORD = 'Uat-Demo-2026!';
+const UAT_PASSWORD = 'Uat-Demo-2026!'; // gitguardian:ignore — intentional UAT demo credential, not a real secret
+const BCRYPT_ROUNDS = 12;
 
-const UAT_ACCOUNTS = [
-  {
-    email: 'poster1@uat.gigs.ge',
-    phone: '+995555001001',
-    dateOfBirth: '1990-01-15',
-    role: 'user' as const,
-    description: 'UAT Poster — creates gigs and accepts applications',
-  },
-  {
-    email: 'worker1@uat.gigs.ge',
-    phone: '+995555001002',
-    dateOfBirth: '1992-03-20',
-    role: 'user' as const,
-    description: 'UAT Worker 1 — browses gigs and applies',
-  },
-  {
-    email: 'worker2@uat.gigs.ge',
-    phone: '+995555001003',
-    dateOfBirth: '1988-07-22',
-    role: 'user' as const,
-    description: 'UAT Worker 2 — second applicant for multi-applicant scenarios',
-  },
-] as const;
+if (process.env.NODE_ENV === 'production') {
+  console.error('❌  seed-uat.ts must not run in production.');
+  process.exit(1);
+}
 
-async function seedUat() {
-  if (process.env.NODE_ENV === 'production') {
-    console.error('Refusing to run UAT seed in production.');
-    process.exit(1);
-  }
-
+async function seed() {
   console.log('Seeding UAT accounts…');
 
-  const passwordHash = await hashPassword(UAT_PASSWORD);
+  const hash = await bcrypt.hash(UAT_PASSWORD, BCRYPT_ROUNDS);
 
-  let created = 0;
-  let skipped = 0;
+  const accounts = [
+    {
+      email: 'poster1@uat.gigs.ge',
+      phone: '+995555001001',
+      dateOfBirth: '1990-01-15',
+    },
+    {
+      email: 'worker1@uat.gigs.ge',
+      phone: '+995555001002',
+      dateOfBirth: '1992-03-20',
+    },
+    {
+      email: 'worker2@uat.gigs.ge',
+      phone: '+995555001003',
+      dateOfBirth: '1988-07-22',
+    },
+  ];
 
-  for (const account of UAT_ACCOUNTS) {
-    const existing = await db.query.users.findFirst({
-      where: eq(users.email, account.email),
-    });
-
-    if (existing) {
-      console.log(`  ⟳ ${account.email} — already exists, skipping`);
-      skipped++;
-      continue;
-    }
-
-    const [newUser] = await db
+  for (const acc of accounts) {
+    const [inserted] = await db
       .insert(users)
       .values({
-        email: account.email,
-        phone: account.phone,
-        passwordHash,
-        dateOfBirth: account.dateOfBirth,
-        role: account.role,
-        emailVerified: true,   // pre-verified so reviewers can sign in directly
-        phoneVerified: false,  // phone OTP is deferred to a follow-up UAT slice
+        email: acc.email,
+        phone: acc.phone,
+        passwordHash: hash,
+        dateOfBirth: acc.dateOfBirth,
+        emailVerified: true,
+        phoneVerified: true,  // ← both verified so accounts can post and apply
         status: 'active',
+        role: 'user',
       })
-      .returning();
+      .onConflictDoNothing({ target: users.email })
+      .returning({ id: users.id });
 
-    // Create an empty profile row
-    await db.insert(userProfiles).values({ userId: newUser.id });
+    if (inserted) {
+      await db
+        .insert(userProfiles)
+        .values({ userId: inserted.id })
+        .onConflictDoNothing({ target: userProfiles.userId });
 
-    console.log(`  ✓ ${account.email} (${account.description})`);
-    created++;
+      console.log(`  ✓ Inserted ${acc.email}`);
+    } else {
+      console.log(`  · Skipped ${acc.email} (already exists)`);
+    }
   }
 
-  console.log(`\nUAT seed complete — ${created} created, ${skipped} skipped.`);
+  console.log('UAT seed complete.');
   process.exit(0);
 }
 
-seedUat().catch((err) => {
-  console.error('UAT seed failed:', err);
+seed().catch((err) => {
+  console.error('Seed failed:', err);
   process.exit(1);
 });

@@ -1,9 +1,10 @@
 import type { FastifyInstance } from 'fastify';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, desc } from 'drizzle-orm';
 import { createGigSchema, updateGigSchema } from '@gigs/shared/schemas';
 import { db } from '../../db/index.js';
 import { gigs } from '../../db/schema/index.js';
 import { requireAuth, requireVerified } from '../../middleware/guards.js';
+import { verifyAccessToken } from '../../lib/auth.js';
 
 const DEFAULT_GIG_EXPIRY_DAYS = 30;
 
@@ -162,10 +163,19 @@ export async function gigsRoutes(app: FastifyInstance) {
     return reply.send({ gig });
   });
 
+  app.get('/mine', { preHandler: [requireAuth] }, async (request, reply) => {
+    const data = await db.query.gigs.findMany({
+      where: eq(gigs.posterId, request.user.sub),
+      orderBy: [desc(gigs.createdAt)],
+    });
+
+    return reply.send({ data });
+  });
+
   app.get('/', async (_request, reply) => {
     const data = await db.query.gigs.findMany({
       where: eq(gigs.status, 'active'),
-      orderBy: (table, { desc }) => [desc(table.createdAt)],
+      orderBy: [desc(gigs.createdAt)],
     });
 
     return reply.send({ data });
@@ -175,11 +185,28 @@ export async function gigsRoutes(app: FastifyInstance) {
     const params = request.params as { id: string };
 
     const gig = await db.query.gigs.findFirst({
-      where: and(eq(gigs.id, params.id), eq(gigs.status, 'active')),
+      where: eq(gigs.id, params.id),
     });
 
     if (!gig) {
       return reply.status(404).send({ error: 'Gig not found', statusCode: 404 });
+    }
+
+    // Poster can see their own gig regardless of status.
+    // All other viewers only see active gigs.
+    const authHeader = request.headers.authorization;
+    if (gig.status !== 'active') {
+      let requesterId: string | null = null;
+      if (authHeader?.startsWith('Bearer ')) {
+        try {
+          requesterId = verifyAccessToken(authHeader.slice(7)).sub;
+        } catch {
+          // invalid token — treat as unauthenticated
+        }
+      }
+      if (requesterId !== gig.posterId) {
+        return reply.status(404).send({ error: 'Gig not found', statusCode: 404 });
+      }
     }
 
     return reply.send({ gig });

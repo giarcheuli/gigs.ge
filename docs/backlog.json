@@ -1,9 +1,9 @@
 {
   "meta": {
-    "updatedAt": "2026-05-01",
+    "updatedAt": "2026-05-12",
     "goal": "Reach a narrow but credible stakeholder UAT as soon as possible.",
-    "repoState": "early_implementation",
-    "summary": "Backend auth, gigs, applications, and contracts (minimum signing flow) are mounted with focused request-level integration tests. Shared schema and database structure are broad, while web and admin remain placeholder UIs for the core UAT journey."
+    "repoState": "uat_ready_pending_gce_provisioning",
+    "summary": "Full UAT happy path is implemented end-to-end: auth, gig board (browse/post/view/apply), contract lifecycle (sign/complete/dispute/cancel/quit), account dashboard, UAT seed. Frontend has 11 routes. Integration tests cover auth, gigs, applications, and the contract lifecycle. API error responses are standardized. UAT runbook is live at docs/guides/uat-runbook.md. Docker Compose stack (postgres:16, redis:7, api, web) is on uat/first-slice with idempotent schema-push + UAT-seed on every container start. Smoke check script at scripts/smoke-check.sh validates a live environment in 6 checks. Remaining before stakeholder UAT: (1) provision a GCE VM and deploy the stack, (2) run smoke-check.sh against it, (3) stakeholder user guides and FAQ."
   },
   "uatCriticalPath": [
     {
@@ -19,12 +19,26 @@
     {
       "order": 3,
       "task": "Replace placeholder web/admin pages with minimal UAT-ready user flows.",
-      "status": "in_progress"
+      "status": "done",
+      "completedAt": "2026-05-11",
+      "notes": "11 routes: /, /register, /login, /verify, /account, /gigs, /gigs/new, /gigs/[id], /contracts/[id], and supporting lib. UAT seed provides 3 pre-verified accounts."
     },
     {
       "order": 4,
       "task": "Prepare stakeholder-facing docs, smoke checks, and a repeatable UAT environment.",
-      "status": "not_started"
+      "status": "in_progress",
+      "completedSubtasks": [
+        "UAT runbook at docs/guides/uat-runbook.md",
+        "Docker Compose stack (docker-compose.yml + Dockerfiles) on uat/first-slice — idempotent schema push + UAT seed on container start",
+        "Smoke check script at scripts/smoke-check.sh — 6 checks covering health, auth, gigs, regions"
+      ],
+      "remaining": [
+        "Provision GCE VM and deploy the stack",
+        "Run scripts/smoke-check.sh against the live URL to gate UAT handoff",
+        "Stakeholder user guides (step-by-step for poster and worker roles)",
+        "FAQ for trust model and fee structure"
+      ],
+      "notes": "Docker stack and smoke check are done. Only GCE provisioning and stakeholder docs remain before first UAT handoff."
     }
   ],
   "engineering": [
@@ -37,8 +51,10 @@
     {
       "task": "Write integration tests for critical workflows (e.g., user authentication, gig posting, contract lifecycle).",
       "priority": "high",
-      "status": "in_progress",
-      "phase": "uat_critical"
+      "status": "done",
+      "phase": "uat_critical",
+      "completedAt": "2026-05-11",
+      "notes": "Coverage now spans auth, gigs, applications, and the full contract lifecycle (sign/complete/dispute/cancel/quit), per PR #12. Total ~1,670 lines of test code across four files in apps/api/src/__tests__/."
     },
     {
       "task": "Add end-to-end tests for user flows (e.g., gig poster creating a gig, worker applying, contract completion).",
@@ -85,8 +101,10 @@
     {
       "task": "Standardize error responses across all API routes.",
       "priority": "high",
-      "status": "not_started",
-      "phase": "uat_critical"
+      "status": "done",
+      "phase": "uat_critical",
+      "completedAt": "2026-05-12",
+      "notes": "All routes consistently emit the { error, statusCode } shape. App-level setErrorHandler is wired in apps/api/src/app.ts so Zod and unhandled errors are normalized. If individual endpoints later need richer error payloads (field-level details, codes), revisit as a uat_hardening item."
     },
     {
       "task": "Implement logging for critical errors (e.g., token verification failures).",

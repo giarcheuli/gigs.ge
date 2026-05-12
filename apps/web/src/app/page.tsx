@@ -7,37 +7,47 @@ export default function HomePage() {
   const { user, loading } = useAuth();
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-8">
+    <main className="flex min-h-screen flex-col items-center justify-center p-8 text-center">
       <h1 className="text-4xl font-bold tracking-tight text-brand-700">gigs.ge</h1>
-      <p className="mt-4 text-lg text-gray-600">Find gigs. Get things done.</p>
+      <p className="mt-3 text-lg text-gray-500">Find gigs. Get things done.</p>
 
-      {!loading && (
-        <div className="mt-8 flex flex-col gap-3 w-full max-w-xs">
-          {user ? (
-            <Link
-              href="/account"
-              className="block rounded-lg bg-brand-600 px-4 py-3 text-center font-semibold text-white hover:bg-brand-700 transition-colors"
-            >
-              My Account
-            </Link>
-          ) : (
-            <>
+      <div className="mt-8 flex flex-col gap-3 w-full max-w-xs">
+        <Link
+          href="/gigs"
+          className="rounded-lg bg-brand-600 px-6 py-3 font-semibold text-white hover:bg-brand-700 transition-colors"
+        >
+          Browse gigs
+        </Link>
+
+        {!loading && (
+          <>
+            {user ? (
               <Link
-                href="/register"
-                className="block rounded-lg bg-brand-600 px-4 py-3 text-center font-semibold text-white hover:bg-brand-700 transition-colors"
+                href="/account"
+                className="rounded-lg border border-brand-600 px-6 py-3 font-semibold text-brand-600 hover:bg-brand-50 transition-colors"
               >
-                Create account
+                My account
               </Link>
-              <Link
-                href="/login"
-                className="block rounded-lg border border-brand-600 px-4 py-3 text-center font-semibold text-brand-700 hover:bg-brand-50 transition-colors"
-              >
-                Sign in
-              </Link>
-            </>
-          )}
-        </div>
-      )}
+            ) : (
+              <>
+                <Link
+                  href="/register"
+                  className="rounded-lg border border-brand-600 px-6 py-3 font-semibold text-brand-600 hover:bg-brand-50 transition-colors"
+                >
+                  Create account
+                </Link>
+                <Link
+                  href="/login"
+                  className="text-sm text-gray-500 hover:text-brand-600 transition-colors"
+                >
+                  Sign in
+                </Link>
+              </>
+            )}
+          </>
+        )}
+      </div>
     </main>
   );
 }
+

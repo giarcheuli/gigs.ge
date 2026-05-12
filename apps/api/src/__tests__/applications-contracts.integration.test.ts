@@ -11,6 +11,9 @@ jest.mock('../db/index.js', () => ({
       contracts: {
         findFirst: jest.fn(),
       },
+      users: {
+        findFirst: jest.fn(),
+      },
     },
     insert: jest.fn(),
     update: jest.fn(),
@@ -28,16 +31,10 @@ const OTHER_ID = '33333333-3333-3333-3333-333333333333';
 
 const mockDb = db as unknown as {
   query: {
-    gigs: {
-      findFirst: jest.Mock;
-    };
-    applications: {
-      findFirst: jest.Mock;
-      findMany: jest.Mock;
-    };
-    contracts: {
-      findFirst: jest.Mock;
-    };
+    gigs: { findFirst: jest.Mock };
+    applications: { findFirst: jest.Mock; findMany: jest.Mock };
+    contracts: { findFirst: jest.Mock };
+    users: { findFirst: jest.Mock };
   };
   insert: jest.Mock;
   update: jest.Mock;
@@ -74,6 +71,7 @@ const pendingApplication = {
   updatedAt: new Date('2026-05-01T10:05:00.000Z'),
 };
 
+// contractDraft as returned by a plain db.query (no relations)
 const contractDraft = {
   id: '66666666-6666-6666-6666-666666666666',
   applicationId: pendingApplication.id,
@@ -100,6 +98,28 @@ const contractDraft = {
   updatedAt: new Date('2026-05-01T10:06:00.000Z'),
 };
 
+// contractDraft as returned by GET /:id (with relations hydrated)
+const contractDraftHydrated = {
+  ...contractDraft,
+  gig: { id: activeGig.id, shortDescription: 'Fix leaking pipe', priceType: 'fixed' },
+  application: { id: pendingApplication.id, message: pendingApplication.message },
+};
+
+// in_progress contract (both signed, past half-time for action tests)
+const inProgressContract = {
+  ...contractDraft,
+  status: 'in_progress',
+  posterSignedAt: new Date('2026-05-01T10:07:00.000Z'),
+  workerSignedAt: new Date('2026-05-01T10:08:00.000Z'),
+  // agreedStartAt 2026-05-01, dueAt 2026-05-10 → half-time ~2026-05-05 08:00
+  // Tests run on 2026-05-11 so half-time is already past.
+  updatedAt: new Date('2026-05-01T10:08:00.000Z'),
+};
+
+const POSTER_EMAIL = 'poster@example.com';
+const WORKER_EMAIL = 'worker@example.com';
+const UAT_WORKER_EMAIL = 'worker1@uat.gigs.ge';
+
 const mockInsertReturning = (result: unknown) => ({
   values: jest.fn().mockReturnValue({
     returning: jest.fn().mockResolvedValue([result]),
@@ -121,6 +141,7 @@ describe('Applications + Contracts Routes Integration', () => {
     mockDb.query.applications.findFirst.mockReset();
     mockDb.query.applications.findMany.mockReset();
     mockDb.query.contracts.findFirst.mockReset();
+    mockDb.query.users.findFirst.mockReset();
     mockDb.insert.mockReset();
     mockDb.update.mockReset();
     mockDb.transaction.mockReset();
@@ -273,20 +294,21 @@ describe('Applications + Contracts Routes Integration', () => {
       updatedAt: new Date('2026-05-01T10:07:00.000Z'),
     };
 
-    const inProgressContract = {
+    const bothSignedContract = {
       ...posterSignedContract,
       workerSignedAt: new Date('2026-05-01T10:08:00.000Z'),
       status: 'in_progress',
       updatedAt: new Date('2026-05-01T10:08:00.000Z'),
     };
 
+    // GET /:id returns hydrated shape; sign endpoints use plain shape
     mockDb.query.contracts.findFirst
-      .mockResolvedValueOnce(contractDraft)
-      .mockResolvedValueOnce(contractDraft)
-      .mockResolvedValueOnce(posterSignedContract);
+      .mockResolvedValueOnce(contractDraftHydrated)  // GET fetch
+      .mockResolvedValueOnce(contractDraft)           // POST sign (poster)
+      .mockResolvedValueOnce(posterSignedContract);   // POST sign (worker)
     mockDb.update
       .mockReturnValueOnce(mockUpdateReturning(posterSignedContract))
-      .mockReturnValueOnce(mockUpdateReturning(inProgressContract));
+      .mockReturnValueOnce(mockUpdateReturning(bothSignedContract));
 
     const app = await buildApp();
 
@@ -336,19 +358,19 @@ describe('Applications + Contracts Routes Integration', () => {
     expect(workerSignResponse.statusCode).toBe(200);
     expect(workerSignResponse.json()).toEqual({
       contract: expect.objectContaining({
-        ...inProgressContract,
-        agreedStartAt: inProgressContract.agreedStartAt.toISOString(),
-        dueAt: inProgressContract.dueAt.toISOString(),
-        posterSignedAt: inProgressContract.posterSignedAt.toISOString(),
-        workerSignedAt: inProgressContract.workerSignedAt.toISOString(),
-        createdAt: inProgressContract.createdAt.toISOString(),
-        updatedAt: inProgressContract.updatedAt.toISOString(),
+        ...bothSignedContract,
+        agreedStartAt: bothSignedContract.agreedStartAt.toISOString(),
+        dueAt: bothSignedContract.dueAt.toISOString(),
+        posterSignedAt: bothSignedContract.posterSignedAt.toISOString(),
+        workerSignedAt: bothSignedContract.workerSignedAt.toISOString(),
+        createdAt: bothSignedContract.createdAt.toISOString(),
+        updatedAt: bothSignedContract.updatedAt.toISOString(),
       }),
     });
   });
 
   it('blocks non-parties from viewing contracts', async () => {
-    mockDb.query.contracts.findFirst.mockResolvedValueOnce(contractDraft);
+    mockDb.query.contracts.findFirst.mockResolvedValueOnce(contractDraftHydrated);
 
     const app = await buildApp();
     const response = await app.inject({
@@ -363,5 +385,318 @@ describe('Applications + Contracts Routes Integration', () => {
       error: 'You can only view your own contracts',
       statusCode: 403,
     });
+  });
+
+  // ── mark-complete ──────────────────────────────────────────────────────────
+
+  it('worker can mark job complete (→ pending_completion) after half-time', async () => {
+    const pendingCompletion = {
+      ...inProgressContract,
+      status: 'pending_completion',
+      completionMarkedBy: WORKER_ID,
+      completionMarkedAt: new Date('2026-05-11T12:00:00.000Z'),
+      updatedAt: new Date('2026-05-11T12:00:00.000Z'),
+    };
+
+    mockDb.query.contracts.findFirst.mockResolvedValueOnce(inProgressContract);
+    mockDb.query.users.findFirst.mockResolvedValueOnce({ email: WORKER_EMAIL });
+    mockDb.update.mockReturnValueOnce(mockUpdateReturning(pendingCompletion));
+
+    const app = await buildApp();
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/v1/contracts/${inProgressContract.id}/mark-complete`,
+      headers: { authorization: `Bearer ${makeToken(WORKER_ID)}` },
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().contract.status).toBe('pending_completion');
+    expect(response.json().contract.completionMarkedBy).toBe(WORKER_ID);
+  });
+
+  it('UAT worker (@uat.gigs.ge) bypasses half-time rule on mark-complete', async () => {
+    // Make the contract half-time NOT yet past (start now, due in 10 days)
+    const futureContract = {
+      ...inProgressContract,
+      agreedStartAt: new Date(),
+      dueAt: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000),
+    };
+    const pendingCompletion = { ...futureContract, status: 'pending_completion' };
+
+    mockDb.query.contracts.findFirst.mockResolvedValueOnce(futureContract);
+    mockDb.query.users.findFirst.mockResolvedValueOnce({ email: UAT_WORKER_EMAIL });
+    mockDb.update.mockReturnValueOnce(mockUpdateReturning(pendingCompletion));
+
+    const app = await buildApp();
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/v1/contracts/${futureContract.id}/mark-complete`,
+      headers: { authorization: `Bearer ${makeToken(WORKER_ID)}` },
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().contract.status).toBe('pending_completion');
+  });
+
+  it('blocks mark-complete before half-time for regular workers', async () => {
+    const futureContract = {
+      ...inProgressContract,
+      agreedStartAt: new Date(),
+      dueAt: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000),
+    };
+
+    mockDb.query.contracts.findFirst.mockResolvedValueOnce(futureContract);
+    mockDb.query.users.findFirst.mockResolvedValueOnce({ email: WORKER_EMAIL });
+
+    const app = await buildApp();
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/v1/contracts/${futureContract.id}/mark-complete`,
+      headers: { authorization: `Bearer ${makeToken(WORKER_ID)}` },
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json().error).toMatch(/half-time/i);
+  });
+
+  it('poster can confirm completion (→ completed) from pending_completion', async () => {
+    const pendingCompletion = {
+      ...inProgressContract,
+      status: 'pending_completion',
+      completionMarkedBy: WORKER_ID,
+      completionMarkedAt: new Date('2026-05-11T12:00:00.000Z'),
+    };
+    const completed = {
+      ...pendingCompletion,
+      status: 'completed',
+      completedAt: new Date('2026-05-11T13:00:00.000Z'),
+      updatedAt: new Date('2026-05-11T13:00:00.000Z'),
+    };
+
+    mockDb.query.contracts.findFirst.mockResolvedValueOnce(pendingCompletion);
+    mockDb.query.users.findFirst.mockResolvedValueOnce({ email: POSTER_EMAIL });
+    mockDb.update.mockReturnValueOnce(mockUpdateReturning(completed));
+
+    const app = await buildApp();
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/v1/contracts/${inProgressContract.id}/mark-complete`,
+      headers: { authorization: `Bearer ${makeToken(POSTER_ID)}` },
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().contract.status).toBe('completed');
+    expect(response.json().contract.completedAt).toBeTruthy();
+  });
+
+  // ── dispute ────────────────────────────────────────────────────────────────
+
+  it('poster can raise a dispute from in_progress after half-time', async () => {
+    const disputed = {
+      ...inProgressContract,
+      status: 'disputed',
+      disputedAt: new Date('2026-05-11T12:00:00.000Z'),
+      updatedAt: new Date('2026-05-11T12:00:00.000Z'),
+    };
+
+    mockDb.query.contracts.findFirst.mockResolvedValueOnce(inProgressContract);
+    mockDb.query.users.findFirst.mockResolvedValueOnce({ email: POSTER_EMAIL });
+    mockDb.update.mockReturnValueOnce(mockUpdateReturning(disputed));
+
+    const app = await buildApp();
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/v1/contracts/${inProgressContract.id}/dispute`,
+      headers: { authorization: `Bearer ${makeToken(POSTER_ID)}` },
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().contract.status).toBe('disputed');
+    expect(response.json().contract.disputedAt).toBeTruthy();
+  });
+
+  it('worker cannot raise a dispute', async () => {
+    mockDb.query.contracts.findFirst.mockResolvedValueOnce(inProgressContract);
+
+    const app = await buildApp();
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/v1/contracts/${inProgressContract.id}/dispute`,
+      headers: { authorization: `Bearer ${makeToken(WORKER_ID)}` },
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(403);
+  });
+
+  it('poster cannot dispute before half-time', async () => {
+    const earlyContract = {
+      ...inProgressContract,
+      agreedStartAt: new Date(),
+      dueAt: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000),
+    };
+
+    mockDb.query.contracts.findFirst.mockResolvedValueOnce(earlyContract);
+    mockDb.query.users.findFirst.mockResolvedValueOnce({ email: POSTER_EMAIL });
+
+    const app = await buildApp();
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/v1/contracts/${earlyContract.id}/dispute`,
+      headers: { authorization: `Bearer ${makeToken(POSTER_ID)}` },
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json().error).toMatch(/half-time/i);
+  });
+
+  // ── cancel ─────────────────────────────────────────────────────────────────
+
+  it('either party can cancel an in_progress contract (fee applies outside grace)', async () => {
+    const cancelled = {
+      ...inProgressContract,
+      status: 'cancelled',
+      cancelledAt: new Date('2026-05-11T12:00:00.000Z'),
+      feeEligible: true,
+      updatedAt: new Date('2026-05-11T12:00:00.000Z'),
+    };
+
+    mockDb.query.contracts.findFirst.mockResolvedValueOnce(inProgressContract);
+    mockDb.update.mockReturnValueOnce(mockUpdateReturning(cancelled));
+
+    const app = await buildApp();
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/v1/contracts/${inProgressContract.id}/cancel`,
+      headers: { authorization: `Bearer ${makeToken(POSTER_ID)}` },
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().contract.status).toBe('cancelled');
+    expect(response.json().withinGrace).toBe(false);
+  });
+
+  it('cancellation within 24h of signing waives fees (grace period)', async () => {
+    const now = new Date();
+    const recentContract = {
+      ...inProgressContract,
+      // Both signed just 1 hour ago
+      posterSignedAt: new Date(now.getTime() - 60 * 60 * 1000),
+      workerSignedAt: new Date(now.getTime() - 60 * 60 * 1000),
+    };
+    const cancelled = {
+      ...recentContract,
+      status: 'cancelled',
+      feeEligible: false,
+      cancelledAt: now,
+      updatedAt: now,
+    };
+
+    mockDb.query.contracts.findFirst.mockResolvedValueOnce(recentContract);
+    mockDb.update.mockReturnValueOnce(mockUpdateReturning(cancelled));
+
+    const app = await buildApp();
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/v1/contracts/${recentContract.id}/cancel`,
+      headers: { authorization: `Bearer ${makeToken(WORKER_ID)}` },
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().withinGrace).toBe(true);
+    expect(response.json().contract.feeEligible).toBe(false);
+  });
+
+  it('blocks cancellation from non-parties', async () => {
+    mockDb.query.contracts.findFirst.mockResolvedValueOnce(inProgressContract);
+
+    const app = await buildApp();
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/v1/contracts/${inProgressContract.id}/cancel`,
+      headers: { authorization: `Bearer ${makeToken(OTHER_ID)}` },
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(403);
+  });
+
+  // ── quit ───────────────────────────────────────────────────────────────────
+
+  it('worker can quit an in_progress contract (fee applies after 24h)', async () => {
+    const quit = {
+      ...inProgressContract,
+      status: 'quit',
+      quitAt: new Date('2026-05-11T12:00:00.000Z'),
+      feeEligible: true,
+      updatedAt: new Date('2026-05-11T12:00:00.000Z'),
+    };
+
+    mockDb.query.contracts.findFirst.mockResolvedValueOnce(inProgressContract);
+    mockDb.update.mockReturnValueOnce(mockUpdateReturning(quit));
+
+    const app = await buildApp();
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/v1/contracts/${inProgressContract.id}/quit`,
+      headers: { authorization: `Bearer ${makeToken(WORKER_ID)}` },
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().contract.status).toBe('quit');
+    expect(response.json().quitNoFee).toBe(false);
+  });
+
+  it('worker quit within 24h of signing incurs no fee', async () => {
+    const now = new Date();
+    const recentContract = {
+      ...inProgressContract,
+      workerSignedAt: new Date(now.getTime() - 30 * 60 * 1000), // 30 min ago
+    };
+    const quit = {
+      ...recentContract,
+      status: 'quit',
+      feeEligible: false,
+      quitAt: now,
+      updatedAt: now,
+    };
+
+    mockDb.query.contracts.findFirst.mockResolvedValueOnce(recentContract);
+    mockDb.update.mockReturnValueOnce(mockUpdateReturning(quit));
+
+    const app = await buildApp();
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/v1/contracts/${recentContract.id}/quit`,
+      headers: { authorization: `Bearer ${makeToken(WORKER_ID)}` },
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().quitNoFee).toBe(true);
+    expect(response.json().contract.feeEligible).toBe(false);
+  });
+
+  it('poster cannot quit a contract (worker only)', async () => {
+    mockDb.query.contracts.findFirst.mockResolvedValueOnce(inProgressContract);
+
+    const app = await buildApp();
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/v1/contracts/${inProgressContract.id}/quit`,
+      headers: { authorization: `Bearer ${makeToken(POSTER_ID)}` },
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(403);
   });
 });

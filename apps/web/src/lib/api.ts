@@ -1,12 +1,14 @@
 /**
- * API fetch wrapper for apps/web.
+ * Module-level access token storage + fetch wrapper.
  *
- * - Attaches the in-memory access token as a Bearer header on every request.
- * - Automatically attempts a silent token refresh on 401 and retries once.
- * - Falls back to clearing the token on a failed refresh; callers handle redirect.
+ * The access token is kept in a module-level variable (not React state) so it
+ * is available to non-component code (e.g. API helpers) without needing a
+ * context reference.
  *
- * Access tokens are stored in module scope (in-memory only — cleared on page reload).
- * The auth context re-initialises them via a silent refresh call on mount.
+ * apiFetch:
+ *  - Prepends /api/v1 to the path.
+ *  - Attaches the current Bearer token if present.
+ *  - On 401: attempts a silent refresh, retries once.
  */
 
 let _accessToken: string | null = null;
@@ -21,64 +23,51 @@ export function getAccessToken(): string | null {
 
 const BASE = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001').replace(/\/$/, '');
 
-type ApiFetchOptions = RequestInit & {
-  /** Internal flag — prevents infinite refresh loops. */
-  _retry?: boolean;
-};
-
-/**
- * Fetch wrapper that prepends /api/v1, attaches the Bearer token,
- * and silently refreshes on 401.
- */
-export async function apiFetch(
-  path: string,
-  options: ApiFetchOptions = {},
-): Promise<Response> {
-  const { _retry, ...rest } = options;
-
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...(rest.headers as Record<string, string>),
-  };
-
-  if (_accessToken) {
-    headers['Authorization'] = `Bearer ${_accessToken}`;
-  }
-
-  const res = await fetch(`${BASE}/api/v1${path}`, {
-    ...rest,
-    headers,
-    credentials: 'include', // send refresh_token httpOnly cookie
-  });
-
-  if (res.status === 401 && !_retry) {
-    const refreshed = await silentRefresh();
-    if (refreshed) {
-      return apiFetch(path, { ...options, _retry: true });
-    }
-  }
-
-  return res;
-}
-
-/**
- * Attempt to refresh the access token using the httpOnly refresh_token cookie.
- * Returns true if a new access token was obtained.
- */
-export async function silentRefresh(): Promise<boolean> {
+export async function silentRefresh(): Promise<string | null> {
   try {
     const res = await fetch(`${BASE}/api/v1/auth/refresh`, {
       method: 'POST',
       credentials: 'include',
     });
-    if (res.ok) {
-      const data = (await res.json()) as { accessToken: string };
-      setAccessToken(data.accessToken);
-      return true;
+    if (!res.ok) return null;
+    const body = (await res.json()) as { accessToken?: string };
+    if (body.accessToken) {
+      setAccessToken(body.accessToken);
+      return body.accessToken;
     }
+    return null;
   } catch {
-    // network error — treat as failed refresh
+    return null;
   }
-  setAccessToken(null);
-  return false;
+}
+
+export async function apiFetch(path: string, options: RequestInit = {}): Promise<Response> {
+  const headers = new Headers(options.headers as HeadersInit);
+
+  if (_accessToken) {
+    headers.set('Authorization', `Bearer ${_accessToken}`);
+  }
+  if (!headers.has('Content-Type') && !(options.body instanceof FormData)) {
+    headers.set('Content-Type', 'application/json');
+  }
+
+  const res = await fetch(`${BASE}/api/v1${path}`, {
+    ...options,
+    headers,
+    credentials: 'include',
+  });
+
+  if (res.status === 401) {
+    const newToken = await silentRefresh();
+    if (newToken) {
+      headers.set('Authorization', `Bearer ${newToken}`);
+      return fetch(`${BASE}/api/v1${path}`, {
+        ...options,
+        headers,
+        credentials: 'include',
+      });
+    }
+  }
+
+  return res;
 }

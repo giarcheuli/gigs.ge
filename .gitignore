@@ -4,5 +4,6 @@ dist/
 .turbo/
 .env
 .env.local
+deploy.env
 *.tsbuildinfo
 drizzle/
