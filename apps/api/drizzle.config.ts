@@ -5,7 +5,12 @@ import { defineConfig } from 'drizzle-kit';
 // a unix socket path as a URL — Node.js URL parser rejects it with ERR_INVALID_URL.
 // Fall back to DATABASE_URL for local dev and Docker Compose.
 export default defineConfig({
-  schema: './src/db/schema/index.ts',
+  // In production (Docker container) the TS source is compiled to dist/.
+  // drizzle-kit's bundler can't resolve `.js` extension imports in raw TS source,
+  // so point it at the compiled output when NODE_ENV=production.
+  schema: process.env.NODE_ENV === 'production'
+    ? './dist/db/schema/index.js'
+    : './src/db/schema/index.ts',
   out: './drizzle',
   dialect: 'postgresql',
   dbCredentials: process.env.INSTANCE_CONNECTION_NAME
