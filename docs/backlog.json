@@ -2,8 +2,8 @@
   "meta": {
     "updatedAt": "2026-05-12",
     "goal": "Reach a narrow but credible stakeholder UAT as soon as possible.",
-    "repoState": "uat_ready_pending_env",
-    "summary": "Full UAT happy path is implemented end-to-end: auth, gig board (browse/post/view/apply), contract lifecycle (sign/complete/dispute/cancel/quit), account dashboard, UAT seed. Frontend has 11 routes. Integration tests cover auth, gigs, applications, and the contract lifecycle. API error responses are standardized. UAT runbook is live at docs/guides/uat-runbook.md. AI operating contract (CLAUDE.md, scripts/preflight.sh, docs/specs/agent-operating-contract.md) governs all future delivery. Last critical-path item before stakeholder UAT: a hosted UAT environment (in progress on feat/docker-gce-uat). After that lands: optional polish — stakeholder user guides, FAQ, and a usability pass."
+    "repoState": "uat_ready_pending_gce_provisioning",
+    "summary": "Full UAT happy path is implemented end-to-end: auth, gig board (browse/post/view/apply), contract lifecycle (sign/complete/dispute/cancel/quit), account dashboard, UAT seed. Frontend has 11 routes. Integration tests cover auth, gigs, applications, and the contract lifecycle. API error responses are standardized. UAT runbook is live at docs/guides/uat-runbook.md. Docker Compose stack (postgres:16, redis:7, api, web) is on uat/first-slice with idempotent schema-push + UAT-seed on every container start. Smoke check script at scripts/smoke-check.sh validates a live environment in 6 checks. Remaining before stakeholder UAT: (1) provision a GCE VM and deploy the stack, (2) run smoke-check.sh against it, (3) stakeholder user guides and FAQ."
   },
   "uatCriticalPath": [
     {
@@ -27,7 +27,18 @@
       "order": 4,
       "task": "Prepare stakeholder-facing docs, smoke checks, and a repeatable UAT environment.",
       "status": "in_progress",
-      "notes": "UAT runbook is live at docs/guides/uat-runbook.md. Hosted UAT environment in progress on feat/docker-gce-uat. Smoke checks for the deployed env still TBD."
+      "completedSubtasks": [
+        "UAT runbook at docs/guides/uat-runbook.md",
+        "Docker Compose stack (docker-compose.yml + Dockerfiles) on uat/first-slice — idempotent schema push + UAT seed on container start",
+        "Smoke check script at scripts/smoke-check.sh — 6 checks covering health, auth, gigs, regions"
+      ],
+      "remaining": [
+        "Provision GCE VM and deploy the stack",
+        "Run scripts/smoke-check.sh against the live URL to gate UAT handoff",
+        "Stakeholder user guides (step-by-step for poster and worker roles)",
+        "FAQ for trust model and fee structure"
+      ],
+      "notes": "Docker stack and smoke check are done. Only GCE provisioning and stakeholder docs remain before first UAT handoff."
     }
   ],
   "engineering": [
