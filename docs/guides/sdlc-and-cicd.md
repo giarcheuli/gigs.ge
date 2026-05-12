@@ -20,6 +20,12 @@ day-to-day working cycle and git commands.
 No environment is ever deployed from a `copilot/*` branch or a task branch.
 Only the two canonical branches (`uat/first-slice`, `main`) feed real environments.
 
+Important clarification:
+
+1. `dev`, `qa`, `stage`, and `uat` are environment concepts, not branch categories.
+2. We do not keep parallel long-lived branch trees per environment.
+3. We promote validated commits through environments via CI/CD and deployment controls.
+
 ---
 
 ## Branch Lifecycle
@@ -32,6 +38,9 @@ uat/first-slice            ← source of truth
               ↓  milestone boundary reached, UAT accepted
               └── PR → main    ← merge commit, tagged release
 ```
+
+This model is intentionally lean. It trades branch count for discipline in reviews,
+checks, and promotion rules.
 
 ### 1. Create
 
@@ -141,6 +150,11 @@ Automated deployments are not yet wired. This section describes the target state
 | Production | Manual approval after version tag | Production environment |
 
 Until automation is in place, follow the release steps below and deploy manually.
+
+Even with manual deployment, the promotion rule is the same:
+
+1. Deploy UAT only from `uat/first-slice`.
+2. Deploy production only from `main`.
 
 ---
 

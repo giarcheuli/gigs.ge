@@ -4,6 +4,23 @@ This guide defines how work should move through the repository while the team is
 
 The goal is simple: one visible integration branch, one smallest slice at a time, and no ambiguity about which branch reflects the current product state.
 
+## Lean Model (Current Policy)
+
+This project intentionally uses a lean branch model:
+
+1. `main` — stable release branch
+2. `uat/first-slice` — canonical integration branch for current UAT
+3. short-lived task branches — `feat/*`, `fix/*`, `docs/*`, `chore/*`, `refactor/*`
+
+We do **not** maintain long-lived `dev`, `qa`, `stage`, or `release/*` branch trees in this phase.
+
+Why:
+
+1. Fewer long-lived branches means less drift and fewer merge conflicts.
+2. One integration branch gives a single source of truth for stakeholder UAT.
+3. Faster iteration for a small team and agent-driven slices.
+4. Environment gates are handled by CI/CD and deployment targets, not by extra branch layers.
+
 ## Canonical Branches
 
 ### `main`
@@ -80,6 +97,28 @@ Every coding task should follow this loop:
 8. Merge the task branch back into `uat/first-slice`.
 9. Refresh the handoff and backlog if current-state claims changed.
 
+## Visual Flow
+
+```mermaid
+sequenceDiagram
+	participant Dev as Dev or Agent
+	participant Git as GitHub
+	participant CI as CI
+	participant UAT as UAT Env
+	participant Main as main
+
+	Dev->>Git: Sync uat/first-slice
+	Dev->>Git: Create task branch from uat/first-slice
+	Dev->>Dev: Implement one small slice + local checks
+	Dev->>Git: Open PR to uat/first-slice
+	Git->>CI: Run checks
+	CI-->>Git: Pass or fail
+	Git->>Git: Squash merge on pass + approval
+	Git->>UAT: Deploy from uat/first-slice
+	UAT-->>Git: Stakeholder acceptance
+	Git->>Main: PR uat/first-slice -> main (merge commit)
+```
+
 ## Validation Rules
 
 Before calling a slice done:
@@ -122,7 +161,7 @@ Use this only if `origin/uat/first-slice` does not exist yet.
 
 ```bash
 git fetch origin
-git switch -c uat/first-slice --track origin/copilot/define-first-uat-slice-again
+git switch -c uat/first-slice
 git push -u origin uat/first-slice
 ```
 
@@ -145,6 +184,8 @@ git switch -c feat/uat-frontend-flow
 ```
 
 ### Merge an Agent Branch into the Canonical Integration Branch
+
+Use this only for one-off intake of temporary branches that contain useful work.
 
 ```bash
 git fetch origin
