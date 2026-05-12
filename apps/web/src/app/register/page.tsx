@@ -17,7 +17,7 @@ import { registerSchema } from '@gigs/shared/schemas';
 import { z } from 'zod';
 import { useAuth } from '@/lib/auth-context';
 import type { AuthUser } from '@/lib/auth-context';
-import { setAccessToken } from '@/lib/api';
+import { API_BASE, setAccessToken } from '@/lib/api';
 
 const formSchema = registerSchema
   .extend({ confirmPassword: z.string() })
@@ -43,8 +43,6 @@ const formSchema = registerSchema
 
 type FormData = z.infer<typeof formSchema>;
 
-const BASE = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001').replace(/\/$/, '');
-
 export default function RegisterPage() {
   const router = useRouter();
   const { login } = useAuth();
@@ -63,7 +61,7 @@ export default function RegisterPage() {
     setIsSubmitting(true);
 
     try {
-      const res = await fetch(`${BASE}/api/v1/auth/register`, {
+      const res = await fetch(`${API_BASE}/api/v1/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',

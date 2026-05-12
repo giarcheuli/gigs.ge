@@ -62,7 +62,7 @@ Set trigger substitutions to hosted URLs, not localhost:
 - `_API_URL=https://gigsge-api-723467137798.us-central1.run.app`
 - `_FRONTEND_URL=https://gigsge-web-723467137798.us-central1.run.app`
 
-The web app also has a production safeguard: if `_API_URL` is missing or points to localhost, it falls back to the hosted API URL above so login does not break in UAT.
+The web auth screens (`/login`, `/register`, `/verify`) and shared API helper use a production safeguard: if `_API_URL` is missing or points to localhost, they fall back to the hosted API URL above so authentication does not break in UAT.
 
 ---
 

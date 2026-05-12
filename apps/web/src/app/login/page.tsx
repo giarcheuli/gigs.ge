@@ -16,11 +16,9 @@ import { loginSchema } from '@gigs/shared/schemas';
 import { z } from 'zod';
 import { useAuth } from '@/lib/auth-context';
 import type { AuthUser } from '@/lib/auth-context';
-import { setAccessToken } from '@/lib/api';
+import { API_BASE, setAccessToken } from '@/lib/api';
 
 type FormData = z.infer<typeof loginSchema>;
-
-const BASE = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001').replace(/\/$/, '');
 
 function LoginForm() {
   const router = useRouter();
@@ -40,7 +38,7 @@ function LoginForm() {
     setIsSubmitting(true);
 
     try {
-      const res = await fetch(`${BASE}/api/v1/auth/login`, {
+      const res = await fetch(`${API_BASE}/api/v1/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',

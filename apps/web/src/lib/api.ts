@@ -38,11 +38,11 @@ function resolveApiBase(): string {
   return PROD_FALLBACK_API_BASE;
 }
 
-const BASE = resolveApiBase().replace(/\/$/, '');
+export const API_BASE = resolveApiBase().replace(/\/$/, '');
 
 export async function silentRefresh(): Promise<string | null> {
   try {
-    const res = await fetch(`${BASE}/api/v1/auth/refresh`, {
+    const res = await fetch(`${API_BASE}/api/v1/auth/refresh`, {
       method: 'POST',
       credentials: 'include',
     });
@@ -68,7 +68,7 @@ export async function apiFetch(path: string, options: RequestInit = {}): Promise
     headers.set('Content-Type', 'application/json');
   }
 
-  const res = await fetch(`${BASE}/api/v1${path}`, {
+  const res = await fetch(`${API_BASE}/api/v1${path}`, {
     ...options,
     headers,
     credentials: 'include',
@@ -78,7 +78,7 @@ export async function apiFetch(path: string, options: RequestInit = {}): Promise
     const newToken = await silentRefresh();
     if (newToken) {
       headers.set('Authorization', `Bearer ${newToken}`);
-      return fetch(`${BASE}/api/v1${path}`, {
+      return fetch(`${API_BASE}/api/v1${path}`, {
         ...options,
         headers,
         credentials: 'include',
