@@ -8,13 +8,25 @@ const required = (key: string): string => {
   return value;
 };
 
+// When INSTANCE_CONNECTION_NAME is set (Cloud Run + Cloud SQL Auth Proxy),
+// connect via unix socket — no public IP needed and no VPC required.
+// Otherwise fall back to the standard DATABASE_URL (local dev, Docker Compose).
+const buildDatabaseUrl = (): string => {
+  const instanceConnectionName = process.env.INSTANCE_CONNECTION_NAME;
+  if (instanceConnectionName) {
+    const password = required('DB_PASSWORD');
+    return `postgresql://postgres:${encodeURIComponent(password)}@/gigsge?host=/cloudsql/${instanceConnectionName}`;
+  }
+  return required('DATABASE_URL');
+};
+
 export const env = {
   HOST: process.env.HOST ?? '0.0.0.0',
   PORT: Number(process.env.PORT ?? 3001),
   NODE_ENV: process.env.NODE_ENV ?? 'development',
   LOG_LEVEL: process.env.LOG_LEVEL ?? 'info',
 
-  DATABASE_URL: required('DATABASE_URL'),
+  DATABASE_URL: buildDatabaseUrl(),
   REDIS_URL: process.env.REDIS_URL ?? 'redis://localhost:6379',
 
   JWT_ACCESS_SECRET: required('JWT_ACCESS_SECRET'),
