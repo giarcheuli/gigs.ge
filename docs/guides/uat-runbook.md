@@ -53,6 +53,17 @@ cp apps/web/.env.example apps/web/.env.local
 
 The default `NEXT_PUBLIC_API_URL=http://localhost:3001` is correct for local UAT — no changes needed.
 
+### Cloud Run note (important)
+
+For Cloud Run builds, the web bundle is compiled with `NEXT_PUBLIC_API_URL` from Cloud Build substitution `_API_URL`.
+
+Set trigger substitutions to hosted URLs, not localhost:
+
+- `_API_URL=https://gigsge-api-723467137798.us-central1.run.app`
+- `_FRONTEND_URL=https://gigsge-web-723467137798.us-central1.run.app`
+
+The web app also has a production safeguard: if `_API_URL` is missing or points to localhost, it falls back to the hosted API URL above so login does not break in UAT.
+
 ---
 
 ## 3. Database setup
