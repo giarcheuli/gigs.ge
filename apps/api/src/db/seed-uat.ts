@@ -17,7 +17,7 @@ import { db } from './index.js';
 import { users } from './schema/users.js';
 import { userProfiles } from './schema/profiles.js';
 
-const UAT_PASSWORD = 'Uat-Demo-2026!';
+const UAT_PASSWORD = 'Uat-Demo-2026!'; // gitguardian:ignore — intentional UAT demo credential, not a real secret
 const BCRYPT_ROUNDS = 12;
 
 if (process.env.NODE_ENV === 'production') {

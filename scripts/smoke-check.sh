@@ -90,10 +90,13 @@ else
 fi
 
 # ── 3. Login with UAT seed account ───────────────────────────────────────────
-info "3/6  Login (poster1@uat.gigs.ge)"
+# These are intentional demo credentials seeded by db:seed:uat — not real secrets.
+UAT_EMAIL='poster1@uat.gigs.ge'    # gitguardian:ignore
+UAT_PASSWORD='Uat-Demo-2026!'      # gitguardian:ignore
+info "3/6  Login ($UAT_EMAIL)"
 LOGIN_BODY=$(curl -sf -X POST "$API_BASE/api/v1/auth/login" \
   -H "Content-Type: application/json" \
-  -d '{"email":"poster1@uat.gigs.ge","password":"Uat-Demo-2026!"}' 2>/dev/null || echo "")
+  -d "{\"email\":\"$UAT_EMAIL\",\"password\":\"$UAT_PASSWORD\"}" 2>/dev/null || echo "")
 
 ACCESS_TOKEN=$(echo "$LOGIN_BODY" | jq -r '.accessToken // empty' 2>/dev/null || echo "")
 if [[ -n "$ACCESS_TOKEN" && "$ACCESS_TOKEN" != "null" ]]; then
