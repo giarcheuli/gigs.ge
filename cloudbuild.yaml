@@ -87,4 +87,4 @@ substitutions:
   _FRONTEND_URL: ''          # REQUIRED — Cloud Run URL of gigsge-web
 
 options:
-  logging: CLOUD_LOGGING
+  logging: CLOUD_LOGGING_ONLY
