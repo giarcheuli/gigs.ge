@@ -7,6 +7,7 @@
 ## The Core Challenge
 
 As `gigs.ge` grows, the risk increases that:
+
 - A spec conflicts with existing business rules (e.g., fee splits, auto-complete timers)
 - A backend feature violates the access-control model (auth/verification flows)
 - A frontend page breaks the visibility rules matrix
@@ -33,24 +34,28 @@ This framework prevents those failures by baking a **coherence check** into ever
 ### Key Rules Maintained Here
 
 **Business logic** (lives in SYSTEM_DESIGN.md, enforced in code):
+
 - Fee calculation: 3% poster, 2% worker on `agreed_price`
 - 48h auto-complete (one party marks done → 48h silence → auto-complete)
 - 24h grace period (cancel within 24h of signing = no fees)
 - Half-time rule, 14-day overdue auto-complete, carry-over, disputes, contact-info visibility
 
 **Auth model** (lives in architecture docs + backend skill):
+
 - Access token: 15m JWT in memory
 - Refresh token: 7d httpOnly cookie at `/api/v1/auth`
 - Protected routes: require auth + optional verification state checks
 - Seeded UAT accounts: pre-verified for walkthrough
 
 **Data model** (lives in architecture docs + database skill):
+
 - All timestamps: UTC, all UUIDs: `gen_random_uuid()`
 - Enums: TEXT columns, not Postgres ENUM types
 - Relations: user ↔ profile (1:1), user ↔ gigs (1:N), gig ↔ applications (1:N), etc.
 - Transactions: used for atomicity on multi-table writes (user + profile creation, contract + ledger)
 
 **Visibility model** (frontend skill + system design):
+
 - Hidden fields: show "🔒 Request access" button
 - Requestable fields: "📩 Request sent" state
 - Contact info: only visible while contract is active
@@ -120,6 +125,7 @@ This framework prevents those failures by baking a **coherence check** into ever
 4. Use this template in PR review:
 
 ```
+
 ## Coherence Check ✓
 
 - [x] Spec ↔ System Design: no rule conflicts, all new behavior documented
@@ -135,11 +141,12 @@ Ready for security review.
 
 Invoke **Security & Coherence Agent** after every code push:
 
-```
+```bash
 /security-coherence check feat/uat-auth-screens against architecture docs
 ```
 
 The agent will:
+
 1. Read the current branch's changes
 2. Load the relevant spec (`docs/specs/feat-uat-auth-screens.md`)
 3. Compare against SYSTEM_DESIGN.md, architecture docs, skill files
@@ -153,6 +160,7 @@ The agent will:
 These are the seams where correctness often breaks. Extra care needed:
 
 ### Auth ↔ Access Control
+
 - All protected routes must verify `request.user` (backend)
 - Sensitive pages must redirect to `/login?next=/requested` if not authenticated (frontend)
 - Unverified users must be blocked from certain actions (spec defines which)
