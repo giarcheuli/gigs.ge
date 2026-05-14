@@ -1,10 +1,23 @@
 'use client';
 
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
 
 export default function HomePage() {
   const { user, loading } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!loading && user) {
+      router.push('/gigs');
+    }
+  }, [user, loading, router]);
+
+  if (loading || user) {
+    return null;
+  }
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-8 text-center">
@@ -19,33 +32,18 @@ export default function HomePage() {
           Browse gigs
         </Link>
 
-        {!loading && (
-          <>
-            {user ? (
-              <Link
-                href="/account"
-                className="rounded-lg border border-brand-600 px-6 py-3 font-semibold text-brand-600 hover:bg-brand-50 transition-colors"
-              >
-                My account
-              </Link>
-            ) : (
-              <>
-                <Link
-                  href="/register"
-                  className="rounded-lg border border-brand-600 px-6 py-3 font-semibold text-brand-600 hover:bg-brand-50 transition-colors"
-                >
-                  Create account
-                </Link>
-                <Link
-                  href="/login"
-                  className="rounded-lg border border-gray-300 px-6 py-3 font-semibold text-gray-600 hover:bg-gray-50 transition-colors"
-                >
-                  Sign in
-                </Link>
-              </>
-            )}
-          </>
-        )}
+        <Link
+          href="/register"
+          className="rounded-lg border border-brand-600 px-6 py-3 font-semibold text-brand-600 hover:bg-brand-50 transition-colors"
+        >
+          Create account
+        </Link>
+        <Link
+          href="/login"
+          className="rounded-lg border border-gray-300 px-6 py-3 font-semibold text-gray-600 hover:bg-gray-50 transition-colors"
+        >
+          Sign in
+        </Link>
       </div>
     </main>
   );

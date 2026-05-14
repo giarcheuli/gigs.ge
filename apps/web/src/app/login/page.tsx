@@ -61,7 +61,7 @@ function LoginForm() {
         login(body.accessToken, body.user);
         // Only follow ?next= for same-origin relative paths (open-redirect protection).
         const next = searchParams.get('next');
-        const safeDest = next && next.startsWith('/') ? next : '/account';
+        const safeDest = next && next.startsWith('/') ? next : '/gigs';
         router.push(safeDest);
       }
     } catch {
