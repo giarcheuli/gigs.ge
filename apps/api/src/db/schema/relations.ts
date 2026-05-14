@@ -1,15 +1,15 @@
 import { relations } from 'drizzle-orm';
-import { users } from './users.js';
-import { userProfiles } from './profiles.js';
-import { refreshTokens } from './auth.js';
-import { regions, cities } from './regions.js';
-import { gigs, gigImages } from './gigs.js';
-import { applications, applicationAttachments } from './applications.js';
-import { contracts, contractAppendices, disputeEvidence, disputeEvidenceFiles } from './contracts.js';
-import { billingLedger, invoices } from './billing.js';
-import { reviews } from './reviews.js';
-import { notifications, messages } from './messages.js';
-import { otpCodes, infoRequests, gigFlags } from './misc.js';
+import { users } from './users';
+import { userProfiles } from './profiles';
+import { refreshTokens } from './auth';
+import { regions, cities } from './regions';
+import { gigs, gigImages } from './gigs';
+import { applications, applicationAttachments } from './applications';
+import { contracts, contractAppendices, disputeEvidence, disputeEvidenceFiles } from './contracts';
+import { billingLedger, invoices } from './billing';
+import { reviews } from './reviews';
+import { notifications, messages } from './messages';
+import { otpCodes, infoRequests, gigFlags } from './misc';
 
 // ── Users ──
 export const usersRelations = relations(users, ({ one, many }) => ({

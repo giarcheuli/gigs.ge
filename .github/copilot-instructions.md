@@ -1,5 +1,10 @@
 # Project: gigs.ge
 
+## Agent Behavior Rules (CRITICAL)
+- **When stuck**: Stop immediately. Do NOT retry the same failing approach. Explain the root cause clearly, then write out a numbered breakdown of subtasks. Wait for the user to authorize before taking any action.
+- **No silent retries**: If a command fails twice, escalate to the user with an explanation before trying again.
+- **One action at a time when authorized**: Execute one subtask, report outcome, then wait for authorization for the next.
+
 A mobile-first gig-board for Georgia with trust-based fees and dispute resolution.
 
 ## Architecture

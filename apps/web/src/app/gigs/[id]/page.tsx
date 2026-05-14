@@ -338,17 +338,25 @@ export default function GigDetailPage() {
             {myApplicationForThisGig ? (
               <div>
                 <p className="text-sm font-medium text-gray-700">
-                  You&apos;ve already applied for this gig.
+                  You&apos;ve applied for this gig.
                 </p>
                 <ApplicationStatusBadge status={myApplicationForThisGig.status} />
-                {myApplicationForThisGig.contract && (
+                <div className="mt-3 space-y-2">
+                  {myApplicationForThisGig.contract && (
+                    <Link
+                      href={`/contracts/${myApplicationForThisGig.contract.id}`}
+                      className="block text-sm text-brand-600 hover:underline"
+                    >
+                      View contract →
+                    </Link>
+                  )}
                   <Link
-                    href={`/contracts/${myApplicationForThisGig.contract.id}`}
-                    className="mt-2 inline-block text-sm text-brand-600 hover:underline"
+                    href="/gigs"
+                    className="block text-sm text-gray-500 hover:text-brand-600"
                   >
-                    View contract →
+                    ← Go back to list of gigs
                   </Link>
-                )}
+                </div>
               </div>
             ) : showApplyForm ? (
               <div className="space-y-3">

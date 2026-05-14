@@ -1,22 +1,14 @@
 'use client';
 
 /**
- * /gigs/new — Create and immediately publish a gig.
+ * /gigs/[id]/edit — Edit a draft gig and publish it.
  *
- * Guard: verified users only. Unverified → /verify, unauthenticated → /login.
- *
- * Flow:
- *  1. User fills form and clicks "Post Gig".
- *  2. POST /api/v1/gigs → creates DRAFT.
- *  3. POST /api/v1/gigs/:id/publish → makes it ACTIVE.
- *  4. Redirect to /gigs/:id.
- *
- * Shows the full visibility-toggle section so stakeholders can see
- * the field-level privacy model during UAT.
+ * Guard: poster only, gig must be in draft status.
+ * Fetches existing data, pre-fills the form, then PATCH + publish on submit.
  */
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -26,16 +18,11 @@ import { useAuth } from '@/lib/auth-context';
 import { apiFetch } from '@/lib/api';
 import { POSTER_FEE_RATE } from '@gigs/shared/constants';
 
-// ── Types ──────────────────────────────────────────────────────────────────────
-
 interface Region {
   id: number;
   nameEn: string;
   cities: { id: number; nameEn: string }[];
 }
-
-// ── Form schema ────────────────────────────────────────────────────────────────
-// coerce.number() converts the HTML string value from <select> to a number.
 
 const PRICE_TYPES = ['fixed', 'range', 'negotiable'] as const;
 const VIS_OPTS = ['public', 'authenticated', 'verified', 'on_request'] as const;
@@ -73,63 +60,48 @@ const gigFormSchema = z
       if (!data.priceRangeMax || !/^\d+(\.\d{1,2})?$/.test(data.priceRangeMax)) {
         ctx.addIssue({ code: 'custom', message: 'Enter a valid maximum price', path: ['priceRangeMax'] });
       }
-      if (
-        data.priceRangeMin &&
-        data.priceRangeMax &&
-        Number(data.priceRangeMin) > Number(data.priceRangeMax)
-      ) {
-        ctx.addIssue({ code: 'custom', message: 'Min must be ≤ max', path: ['priceRangeMin'] });
-      }
     }
   });
 
 type FormData = z.infer<typeof gigFormSchema>;
 
-// ── Component ──────────────────────────────────────────────────────────────────
+const toDatetimeLocal = (iso: string | null) =>
+  iso ? new Date(iso).toISOString().slice(0, 16) : '';
 
-export default function NewGigPage() {
+export default function EditGigPage() {
   const router = useRouter();
+  const { id } = useParams<{ id: string }>();
   const { user, loading } = useAuth();
   const [serverError, setServerError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [ready, setReady] = useState(false);
 
-  // Guard: must be verified
   useEffect(() => {
     if (loading) return;
-    if (!user) { router.replace('/login?next=/gigs/new'); return; }
-    if (!user.emailVerified || !user.phoneVerified) { router.replace('/verify'); }
-  }, [user, loading, router]);
+    if (!user) { router.replace(`/login?next=/gigs/${id}/edit`); }
+  }, [user, loading, router, id]);
 
-  const now = new Date();
-  const plus24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-  const toDatetimeLocal = (d: Date) =>
-    d.toISOString().slice(0, 16); // 'YYYY-MM-DDTHH:MM'
-
-  const {
-    register,
-    handleSubmit,
-    control,
-    formState: { errors },
-  } = useForm<FormData>({
-    resolver: zodResolver(gigFormSchema),
-    defaultValues: {
-      priceType: 'fixed',
-      availableFrom: toDatetimeLocal(now),
-      availableTo: toDatetimeLocal(plus24h),
-      visImages: 'verified',
-      visPrice: 'public',
-      visCity: 'verified',
-      visAddress: 'on_request',
-      visContact: 'on_request',
-      visDates: 'verified',
+  // Fetch the existing gig to pre-fill
+  const { data: gig, isLoading: gigLoading, isError: gigError } = useQuery({
+    queryKey: ['gig', id],
+    queryFn: async () => {
+      const res = await apiFetch(`/gigs/${id}`);
+      if (!res.ok) throw new Error('Not found');
+      const body = (await res.json()) as { gig: {
+        id: string; posterId: string; status: string;
+        shortDescription: string; longDescription: string | null;
+        regionId: number; cityId: number | null; streetAddress: string | null;
+        priceType: string; priceFixed: string | null;
+        priceRangeMin: string | null; priceRangeMax: string | null;
+        availableFrom: string | null; availableTo: string | null;
+        visImages: string; visPrice: string; visCity: string;
+        visAddress: string; visContact: string; visDates: string;
+      }};
+      return body.gig;
     },
+    enabled: !!id,
   });
 
-  const priceType = useWatch({ control, name: 'priceType' });
-  const priceFixed = useWatch({ control, name: 'priceFixed' });
-  const selectedRegionId = useWatch({ control, name: 'regionId' });
-
-  // Fetch regions for dropdowns
   const { data: regions = [] } = useQuery<Region[]>({
     queryKey: ['regions'],
     queryFn: async () => {
@@ -140,17 +112,58 @@ export default function NewGigPage() {
     },
   });
 
-  const citiesForRegion =
-    regions.find((r) => r.id === Number(selectedRegionId))?.cities ?? [];
+  const {
+    register,
+    handleSubmit,
+    control,
+    reset,
+    formState: { errors },
+  } = useForm<FormData>({ resolver: zodResolver(gigFormSchema) });
+
+  // Pre-fill form once gig is loaded
+  useEffect(() => {
+    if (!gig) return;
+    reset({
+      shortDescription: gig.shortDescription,
+      longDescription: gig.longDescription ?? '',
+      regionId: gig.regionId,
+      cityId: gig.cityId ?? 0,
+      streetAddress: gig.streetAddress ?? '',
+      priceType: gig.priceType as FormData['priceType'],
+      priceFixed: gig.priceFixed ?? '',
+      priceRangeMin: gig.priceRangeMin ?? '',
+      priceRangeMax: gig.priceRangeMax ?? '',
+      availableFrom: toDatetimeLocal(gig.availableFrom),
+      availableTo: toDatetimeLocal(gig.availableTo),
+      visImages: gig.visImages as FormData['visImages'],
+      visPrice: gig.visPrice as FormData['visPrice'],
+      visCity: gig.visCity as FormData['visCity'],
+      visAddress: gig.visAddress as FormData['visAddress'],
+      visContact: gig.visContact as FormData['visContact'],
+      visDates: gig.visDates as FormData['visDates'],
+    });
+    setReady(true);
+  }, [gig, reset]);
+
+  const priceType = useWatch({ control, name: 'priceType' });
+  const priceFixed = useWatch({ control, name: 'priceFixed' });
+  const selectedRegionId = useWatch({ control, name: 'regionId' });
+
+  const citiesForRegion = regions.find((r) => r.id === Number(selectedRegionId))?.cities ?? [];
+
+  const estimatedFee =
+    priceType === 'fixed' && priceFixed && /^\d+(\.\d{1,2})?$/.test(priceFixed)
+      ? (Number(priceFixed) * POSTER_FEE_RATE).toFixed(2)
+      : null;
 
   async function onSubmit(data: FormData) {
     setServerError(null);
     setIsSubmitting(true);
 
     try {
-      // Step 1: create draft
-      const createRes = await apiFetch('/gigs', {
-        method: 'POST',
+      // Patch the draft
+      const patchRes = await apiFetch(`/gigs/${id}`, {
+        method: 'PATCH',
         body: JSON.stringify({
           shortDescription: data.shortDescription,
           longDescription: data.longDescription || undefined,
@@ -161,12 +174,8 @@ export default function NewGigPage() {
           priceFixed: data.priceType === 'fixed' ? data.priceFixed : undefined,
           priceRangeMin: data.priceType === 'range' ? data.priceRangeMin : undefined,
           priceRangeMax: data.priceType === 'range' ? data.priceRangeMax : undefined,
-          availableFrom: data.availableFrom
-            ? new Date(data.availableFrom).toISOString()
-            : undefined,
-          availableTo: data.availableTo
-            ? new Date(data.availableTo).toISOString()
-            : undefined,
+          availableFrom: data.availableFrom ? new Date(data.availableFrom).toISOString() : undefined,
+          availableTo: data.availableTo ? new Date(data.availableTo).toISOString() : undefined,
           visImages: data.visImages,
           visPrice: data.visPrice,
           visCity: data.visCity,
@@ -176,20 +185,17 @@ export default function NewGigPage() {
         }),
       });
 
-      const createBody = (await createRes.json()) as { gig?: { id: string }; error?: string };
-
-      if (!createRes.ok) {
-        setServerError(createBody.error ?? 'Failed to create gig.');
+      if (!patchRes.ok) {
+        const body = (await patchRes.json()) as { error?: string };
+        setServerError(body.error ?? 'Failed to update gig.');
         return;
       }
 
-      const gigId = createBody.gig!.id;
-
-      // Step 2: publish
-      const publishRes = await apiFetch(`/gigs/${gigId}/publish`, { method: 'POST' });
+      // Publish
+      const publishRes = await apiFetch(`/gigs/${id}/publish`, { method: 'POST' });
 
       if (!publishRes.ok) {
-        let errMsg = 'Gig saved as draft but could not be published. Please try again.';
+        let errMsg = 'Gig saved but could not be published. Please try again.';
         try {
           const errBody = (await publishRes.json()) as { error?: string };
           if (errBody.error) errMsg = `Publish failed: ${errBody.error}`;
@@ -198,7 +204,7 @@ export default function NewGigPage() {
         return;
       }
 
-      router.push(`/gigs/${gigId}`);
+      router.push('/account');
     } catch {
       setServerError('Network error. Please try again.');
     } finally {
@@ -206,19 +212,39 @@ export default function NewGigPage() {
     }
   }
 
-  if (loading || !user) return null;
+  if (loading || !user || gigLoading) return null;
 
-  // Estimated poster fee (3%) shown next to the price field
-  const estimatedFee =
-    priceType === 'fixed' && priceFixed && /^\d+(\.\d{1,2})?$/.test(priceFixed)
-      ? (Number(priceFixed) * POSTER_FEE_RATE).toFixed(2)
-      : null;
+  if (gigError || (gig && gig.status !== 'draft')) {
+    return (
+      <main className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-gray-600 mb-3">
+            {gigError ? 'Gig not found.' : 'Only draft gigs can be edited.'}
+          </p>
+          <Link href="/gigs" className="text-brand-600 hover:underline text-sm">← Back to board</Link>
+        </div>
+      </main>
+    );
+  }
+
+  if (gig && gig.posterId !== user.id) {
+    return (
+      <main className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-gray-600 mb-3">You can only edit your own gigs.</p>
+          <Link href="/gigs" className="text-brand-600 hover:underline text-sm">← Back to board</Link>
+        </div>
+      </main>
+    );
+  }
+
+  if (!ready) return null;
 
   return (
     <main className="min-h-screen bg-gray-50">
       <header className="bg-white border-b px-4 py-4 flex items-center gap-3">
-        <Link href="/gigs" className="text-gray-500 hover:text-brand-600">← Board</Link>
-        <h1 className="text-lg font-bold text-brand-700">Post a gig</h1>
+        <Link href={`/gigs/${id}`} className="text-gray-500 hover:text-brand-600">← Back</Link>
+        <h1 className="text-lg font-bold text-brand-700">Edit draft</h1>
       </header>
 
       <form onSubmit={handleSubmit(onSubmit)} noValidate className="max-w-xl mx-auto px-4 py-8 space-y-6">
@@ -228,37 +254,21 @@ export default function NewGigPage() {
           </p>
         )}
 
-        {/* ── Description ── */}
         <section className="bg-white rounded-xl p-5 space-y-4 border border-gray-100">
           <h2 className="font-semibold text-gray-800">Description</h2>
-
           <Field label="Short description *" error={errors.shortDescription?.message}>
-            <div className="relative">
-              <textarea
-                {...register('shortDescription')}
-                rows={2}
-                maxLength={160}
-                placeholder="e.g. Need help moving furniture this Saturday"
-                className={textareaCls(!!errors.shortDescription)}
-              />
-            </div>
-            <p className="text-xs text-gray-400 mt-0.5">Max 160 characters — shown on the board card</p>
+            <textarea {...register('shortDescription')} rows={2} maxLength={160}
+              className={textareaCls(!!errors.shortDescription)} />
+            <p className="text-xs text-gray-400 mt-0.5">Max 160 characters</p>
           </Field>
-
           <Field label="Long description" error={errors.longDescription?.message}>
-            <textarea
-              {...register('longDescription')}
-              rows={4}
-              placeholder="More details about the job, requirements, what to bring…"
-              className={textareaCls(!!errors.longDescription)}
-            />
+            <textarea {...register('longDescription')} rows={4}
+              className={textareaCls(!!errors.longDescription)} />
           </Field>
         </section>
 
-        {/* ── Location ── */}
         <section className="bg-white rounded-xl p-5 space-y-4 border border-gray-100">
           <h2 className="font-semibold text-gray-800">Location</h2>
-
           <Field label="Region *" error={errors.regionId?.message}>
             <select {...register('regionId')} className={inputCls(!!errors.regionId)}>
               <option value="">Select region…</option>
@@ -267,7 +277,6 @@ export default function NewGigPage() {
               ))}
             </select>
           </Field>
-
           {citiesForRegion.length > 0 && (
             <Field label="City">
               <select {...register('cityId')} className={inputCls(false)}>
@@ -278,21 +287,14 @@ export default function NewGigPage() {
               </select>
             </Field>
           )}
-
           <Field label="Street address (optional)" error={errors.streetAddress?.message}>
-            <input
-              {...register('streetAddress')}
-              type="text"
-              placeholder="e.g. Rustaveli Ave 15"
-              className={inputCls(!!errors.streetAddress)}
-            />
+            <input {...register('streetAddress')} type="text" placeholder="e.g. Rustaveli Ave 15"
+              className={inputCls(!!errors.streetAddress)} />
           </Field>
         </section>
 
-        {/* ── Price ── */}
         <section className="bg-white rounded-xl p-5 space-y-4 border border-gray-100">
           <h2 className="font-semibold text-gray-800">Compensation</h2>
-
           <fieldset className="flex gap-4">
             {(['fixed', 'range', 'negotiable'] as const).map((type) => (
               <label key={type} className="flex items-center gap-1.5 cursor-pointer text-sm">
@@ -301,7 +303,6 @@ export default function NewGigPage() {
               </label>
             ))}
           </fieldset>
-
           {priceType === 'fixed' && (
             <Field label="Price (₾) *" error={errors.priceFixed?.message}>
               <div className="flex items-center gap-2">
@@ -327,14 +328,11 @@ export default function NewGigPage() {
                   className={`w-40 ${inputCls(!!errors.priceFixed)}`}
                 />
                 {estimatedFee && (
-                  <span className="text-xs text-gray-400">
-                    Platform fee: ₾ {estimatedFee} (3%)
-                  </span>
+                  <span className="text-xs text-gray-400">Platform fee: ₾ {estimatedFee} (3%)</span>
                 )}
               </div>
             </Field>
           )}
-
           {priceType === 'range' && (
             <div className="flex gap-3 items-start">
               <Field label="Min (₾) *" error={errors.priceRangeMin?.message}>
@@ -385,18 +383,10 @@ export default function NewGigPage() {
               </Field>
             </div>
           )}
-
-          {priceType === 'negotiable' && (
-            <p className="text-sm text-gray-500">
-              💬 Discuss the price with applicants in person.
-            </p>
-          )}
         </section>
 
-        {/* ── Dates ── */}
         <section className="bg-white rounded-xl p-5 space-y-4 border border-gray-100">
           <h2 className="font-semibold text-gray-800">Availability</h2>
-
           <div className="grid grid-cols-2 gap-3">
             <Field label="Available from">
               <input {...register('availableFrom')} type="datetime-local" className={inputCls(false)} />
@@ -405,26 +395,15 @@ export default function NewGigPage() {
               <input {...register('availableTo')} type="datetime-local" className={inputCls(false)} />
             </Field>
           </div>
-          <p className="text-xs text-gray-400">
-            These dates define the job window. The contract start/due dates default to these values.
-          </p>
         </section>
 
-        {/* ── Visibility ── */}
         <section className="bg-white rounded-xl p-5 space-y-3 border border-gray-100">
           <h2 className="font-semibold text-gray-800">Field visibility</h2>
-          <p className="text-xs text-gray-500">
-            Control who can see each field on your gig listing.
-          </p>
-
           <div className="grid grid-cols-2 gap-3">
-            {VIS_FIELD_CONFIG.map(({ key, label, defaultVal }) => (
+            {VIS_FIELD_CONFIG.map(({ key, label }) => (
               <Field key={key} label={label}>
-                <select
-                  {...register(key as keyof FormData)}
-                  defaultValue={defaultVal}
-                  className="rounded-md border border-gray-300 px-2 py-1.5 text-xs outline-none focus:ring-1 focus:ring-brand-500"
-                >
+                <select {...register(key as keyof FormData)}
+                  className="rounded-md border border-gray-300 px-2 py-1.5 text-xs outline-none focus:ring-1 focus:ring-brand-500">
                   <option value="public">Public</option>
                   <option value="authenticated">Logged-in users</option>
                   <option value="verified">Verified users</option>
@@ -435,47 +414,30 @@ export default function NewGigPage() {
           </div>
         </section>
 
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="w-full rounded-lg bg-brand-600 px-4 py-3 font-semibold text-white hover:bg-brand-700 disabled:opacity-60 transition-colors"
-        >
-          {isSubmitting ? 'Posting…' : 'Post gig'}
+        <button type="submit" disabled={isSubmitting}
+          className="w-full rounded-lg bg-brand-600 px-4 py-3 font-semibold text-white hover:bg-brand-700 disabled:opacity-60 transition-colors">
+          {isSubmitting ? 'Saving…' : 'Save & Publish'}
         </button>
       </form>
     </main>
   );
 }
 
-// ── Visibility field config ────────────────────────────────────────────────────
-
 const VIS_FIELD_CONFIG = [
-  { key: 'visImages', label: 'Images', defaultVal: 'verified' },
-  { key: 'visPrice', label: 'Price', defaultVal: 'public' },
-  { key: 'visCity', label: 'City', defaultVal: 'verified' },
-  { key: 'visAddress', label: 'Street address', defaultVal: 'on_request' },
-  { key: 'visContact', label: 'Contact info', defaultVal: 'on_request' },
-  { key: 'visDates', label: 'Available dates', defaultVal: 'verified' },
+  { key: 'visImages', label: 'Images' },
+  { key: 'visPrice', label: 'Price' },
+  { key: 'visCity', label: 'City' },
+  { key: 'visAddress', label: 'Street address' },
+  { key: 'visContact', label: 'Contact info' },
+  { key: 'visDates', label: 'Available dates' },
 ] as const;
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function Field({
-  label,
-  error,
-  children,
-}: {
-  label: string;
-  error?: string;
-  children: React.ReactNode;
-}) {
+function Field({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-1">
       <label className="text-sm font-medium text-gray-700">{label}</label>
       {children}
-      {error && (
-        <p role="alert" className="text-xs text-red-600">{error}</p>
-      )}
+      {error && <p role="alert" className="text-xs text-red-600">{error}</p>}
     </div>
   );
 }

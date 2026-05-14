@@ -1,9 +1,9 @@
 {
   "meta": {
-    "updatedAt": "2026-05-12",
+    "updatedAt": "2026-05-14",
     "goal": "Reach a narrow but credible stakeholder UAT as soon as possible.",
-    "repoState": "uat_ready_pending_gce_provisioning",
-    "summary": "Full UAT happy path is implemented end-to-end: auth, gig board (browse/post/view/apply), contract lifecycle (sign/complete/dispute/cancel/quit), account dashboard, UAT seed. Frontend has 11 routes. Integration tests cover auth, gigs, applications, and the contract lifecycle. API error responses are standardized. UAT runbook is live at docs/guides/uat-runbook.md. Docker Compose stack (postgres:16, redis:7, api, web) is on uat/first-slice with idempotent schema-push + UAT-seed on every container start. Smoke check script at scripts/smoke-check.sh validates a live environment in 6 checks. Remaining before stakeholder UAT: (1) provision a GCE VM and deploy the stack, (2) run smoke-check.sh against it, (3) stakeholder user guides and FAQ."
+    "repoState": "local_uat_testing",
+    "summary": "Full UAT happy path is implemented end-to-end. Cloud Run is deployed (gigsge-api + gigsge-web). Local dev stack is working: db:push + db:seed:uat (now also seeds regions/cities). Several UI bugs found during local testing were fixed on 2026-05-13: Sign In button styling, register page onBlur validation, phone field +995 prefix, password field labels, back navigation, and regions dropdown (seed-uat now calls seedRegions). Latest local validation shows the frontend build and API lint pass, and the applications route integration test now passes after the targeted backend fix. Cloud Build trigger substitution _API_URL still needs manual correction in GCP Console."
   },
   "uatCriticalPath": [
     {
@@ -41,12 +41,57 @@
       "notes": "Docker stack and smoke check are done. Only GCE provisioning and stakeholder docs remain before first UAT handoff."
     }
   ],
+  "uiBugs": [
+    {
+      "task": "Sign In button on homepage had plain-text styling (no box).",
+      "status": "done",
+      "completedAt": "2026-05-13"
+    },
+    {
+      "task": "Register: email field did not validate on blur.",
+      "status": "done",
+      "completedAt": "2026-05-13",
+      "notes": "Added mode: 'onBlur' to useForm."
+    },
+    {
+      "task": "Register: phone field required manual E.164 entry.",
+      "status": "done",
+      "completedAt": "2026-05-13",
+      "notes": "Replaced with +995 prefix display + local number input. Only Georgia available."
+    },
+    {
+      "task": "Register: password fields labelled 'Password' / 'Confirm password'.",
+      "status": "done",
+      "completedAt": "2026-05-13",
+      "notes": "Renamed to 'Create New Password' / 'Confirm New Password'."
+    },
+    {
+      "task": "Register: no back navigation to homepage.",
+      "status": "done",
+      "completedAt": "2026-05-13",
+      "notes": "Added '← Back' link at top of form."
+    },
+    {
+      "task": "Post Gig: region dropdown empty.",
+      "status": "done",
+      "completedAt": "2026-05-13",
+      "notes": "seed-uat.ts did not seed regions. Fixed: seedRegions() is now called inside seed-uat. Re-run pnpm --filter @gigs/api db:seed:uat to populate."
+    }
+  ],
   "engineering": [
     {
       "task": "Expand unit test coverage for backend API routes (e.g., auth, gigs, contracts).",
       "priority": "high",
       "status": "done",
       "phase": "uat_foundation"
+    },
+    {
+      "task": "Fix the applications POST route 500 error and restore the worker application integration test.",
+      "priority": "high",
+      "status": "done",
+      "phase": "uat_critical",
+      "completedAt": "2026-05-14",
+      "notes": "Resolved mock coverage in apps/api/src/__tests__/applications-contracts.integration.test.ts by stubbing the second notification insert. The targeted integration test now passes."
     },
     {
       "task": "Write integration tests for critical workflows (e.g., user authentication, gig posting, contract lifecycle).",

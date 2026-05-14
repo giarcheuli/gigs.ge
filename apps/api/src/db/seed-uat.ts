@@ -16,6 +16,7 @@ import bcrypt from 'bcryptjs';
 import { db } from './index.js';
 import { users } from './schema/users.js';
 import { userProfiles } from './schema/profiles.js';
+import { seedRegions } from './seed.js';
 
 const UAT_PASSWORD = 'Uat-Demo-2026!'; // gitguardian:ignore — intentional UAT demo credential, not a real secret
 const BCRYPT_ROUNDS = 12;
@@ -26,6 +27,9 @@ if (process.env.NODE_ENV === 'production' && !process.env.ENABLE_UAT_SEED) {
 }
 
 async function seed() {
+  // Seed regions/cities first (idempotent)
+  await seedRegions();
+
   console.log('Seeding UAT accounts…');
 
   const hash = await bcrypt.hash(UAT_PASSWORD, BCRYPT_ROUNDS);

@@ -150,7 +150,9 @@ describe('Applications + Contracts Routes Integration', () => {
   it('allows a verified worker to apply to an active gig', async () => {
     mockDb.query.gigs.findFirst.mockResolvedValueOnce(activeGig);
     mockDb.query.applications.findFirst.mockResolvedValueOnce(null);
-    mockDb.insert.mockReturnValueOnce(mockInsertReturning(pendingApplication));
+    mockDb.insert
+      .mockReturnValueOnce(mockInsertReturning(pendingApplication))
+      .mockReturnValueOnce(mockInsertReturning({ id: 'notification-1' }));
 
     const app = await buildApp();
     const response = await app.inject({

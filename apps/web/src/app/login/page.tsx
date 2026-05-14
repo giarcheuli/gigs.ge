@@ -31,7 +31,7 @@ function LoginForm() {
     register,
     handleSubmit,
     formState: { errors },
-  } = useForm<FormData>({ resolver: zodResolver(loginSchema) });
+  } = useForm<FormData>({ resolver: zodResolver(loginSchema), mode: 'onBlur' });
 
   async function onSubmit(data: FormData) {
     setServerError(null);
@@ -124,6 +124,9 @@ export default function LoginPage() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-6">
       <div className="w-full max-w-sm">
+        <Link href="/" className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-brand-600 mb-4">
+          ← Back
+        </Link>
         <h1 className="text-2xl font-bold text-brand-700 mb-1">Sign in</h1>
         <p className="text-sm text-gray-500 mb-6">
           New here?{' '}

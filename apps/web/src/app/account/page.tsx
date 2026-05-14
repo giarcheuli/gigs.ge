@@ -1,11 +1,12 @@
 'use client';
 
 /**
- * /account — Authenticated user home with three tabs:
+ * /account — Authenticated user home with four tabs:
  *
  *  Profile  — email, phone, verification status, member since, logout.
  *  My Jobs  — gigs posted by the current user (all statuses).
  *  My Work  — applications submitted by the current user with derived status.
+ *  Notifications — inbox of notifications (e.g., new applications).
  */
 
 import { useEffect, useState } from 'react';
@@ -38,7 +39,21 @@ interface ApplicationWithGig {
   contract: Contract | null;
 }
 
-type Tab = 'profile' | 'my-jobs' | 'my-work';
+interface Notification {
+  id: string;
+  type: string;
+  payload: {
+    applicationId?: string;
+    gigId?: string;
+    gigName?: string;
+    applicantId?: string;
+    [key: string]: any;
+  };
+  readAt: string | null;
+  createdAt: string;
+}
+
+type Tab = 'profile' | 'my-jobs' | 'my-work' | 'notifications';
 
 // ── Page ───────────────────────────────────────────────────────────────────────
 
@@ -66,7 +81,7 @@ export default function AccountPage() {
       {/* Tabs */}
       <div className="bg-white border-b">
         <nav className="flex max-w-2xl mx-auto px-4">
-          {(['profile', 'my-jobs', 'my-work'] as Tab[]).map((t) => (
+          {(['profile', 'my-jobs', 'my-work', 'notifications'] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -77,7 +92,7 @@ export default function AccountPage() {
                   : 'border-transparent text-gray-500 hover:text-gray-700',
               ].join(' ')}
             >
-              {t === 'profile' ? 'Profile' : t === 'my-jobs' ? 'My Jobs' : 'My Work'}
+              {t === 'profile' ? 'Profile' : t === 'my-jobs' ? 'My Jobs' : t === 'my-work' ? 'My Work' : 'Notifications'}
             </button>
           ))}
         </nav>
@@ -88,6 +103,7 @@ export default function AccountPage() {
         {tab === 'profile' && <ProfileTab logout={logout} />}
         {tab === 'my-jobs' && <MyJobsTab />}
         {tab === 'my-work' && <MyWorkTab />}
+        {tab === 'notifications' && <NotificationsTab />}
       </div>
     </main>
   );
@@ -322,7 +338,114 @@ function MyWorkTab() {
   );
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Notifications tab ──────────────────────────────────────────────────────────
+
+function NotificationsTab() {
+  const qc = useQueryClient();
+
+  const { data: notifData, isLoading } = useQuery<{ data: Notification[]; unreadCount: number }>({
+    queryKey: ['notifications', 'all'],
+    queryFn: async () => {
+      const res = await apiFetch('/notifications/all');
+      if (!res.ok) throw new Error('Failed to load notifications');
+      return res.json();
+    },
+  });
+
+  const notifications = notifData?.data ?? [];
+  const unreadCount = notifData?.unreadCount ?? 0;
+
+  const markReadMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiFetch(`/notifications/${id}/read`, { method: 'POST' });
+      if (!res.ok) throw new Error('Failed to mark as read');
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications', 'all'] }),
+  });
+
+  const markAllReadMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiFetch('/notifications/read-all', { method: 'POST' });
+      if (!res.ok) throw new Error('Failed to mark all as read');
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications', 'all'] }),
+  });
+
+  function renderNotification(notif: Notification) {
+    if (notif.type === 'application_submitted') {
+      const { gigName, gigId } = notif.payload;
+      return (
+        <Link
+          href={`/gigs/${gigId}`}
+          className="block bg-white rounded-xl p-4 border border-gray-100 hover:border-brand-200 transition-all space-y-2"
+        >
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-sm font-semibold text-gray-900 line-clamp-2">
+              📋 Someone applied for <span className="text-brand-600">{gigName}</span>
+            </p>
+            {!notif.readAt && (
+              <span className="shrink-0 h-2 w-2 rounded-full bg-brand-600" />
+            )}
+          </div>
+          <p className="text-xs text-gray-400">{fmtDate(notif.createdAt)}</p>
+        </Link>
+      );
+    }
+
+    // Fallback for unknown notification types
+    return (
+      <div className="block bg-white rounded-xl p-4 border border-gray-100 space-y-2">
+        <p className="text-sm text-gray-900">Notification: {notif.type}</p>
+        <p className="text-xs text-gray-400">{fmtDate(notif.createdAt)}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {unreadCount > 0 && (
+        <div className="flex items-center justify-between bg-brand-50 rounded-lg p-3 border border-brand-100">
+          <p className="text-sm font-medium text-brand-900">
+            {unreadCount} unread {unreadCount === 1 ? 'notification' : 'notifications'}
+          </p>
+          <button
+            onClick={() => markAllReadMutation.mutate()}
+            disabled={markAllReadMutation.isPending}
+            className="text-xs text-brand-600 hover:underline disabled:opacity-50"
+          >
+            Mark all as read
+          </button>
+        </div>
+      )}
+
+      {isLoading && <div className="animate-pulse h-20 bg-gray-100 rounded-xl" />}
+
+      {!isLoading && notifications.length === 0 && (
+        <p className="text-sm text-gray-500 text-center py-8">
+          No notifications yet. Check back when someone applies for your gigs!
+        </p>
+      )}
+
+      {notifications.map((notif) => (
+        <div key={notif.id} className="relative">
+          {renderNotification(notif)}
+          {!notif.readAt && (
+            <button
+              onClick={() => markReadMutation.mutate(notif.id)}
+              disabled={markReadMutation.isPending}
+              className="absolute top-4 right-4 text-xs text-gray-400 hover:text-gray-600 disabled:opacity-50"
+              title="Mark as read"
+            >
+              ✕
+            </button>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (

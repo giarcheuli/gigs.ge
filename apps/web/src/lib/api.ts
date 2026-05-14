@@ -64,7 +64,8 @@ export async function apiFetch(path: string, options: RequestInit = {}): Promise
   if (_accessToken) {
     headers.set('Authorization', `Bearer ${_accessToken}`);
   }
-  if (!headers.has('Content-Type') && !(options.body instanceof FormData)) {
+  // Only set Content-Type if there's a body AND it's not FormData
+  if (!headers.has('Content-Type') && options.body && !(options.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json');
   }
 

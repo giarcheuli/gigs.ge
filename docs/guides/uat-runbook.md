@@ -93,7 +93,22 @@ All three accounts have `emailVerified: true` and `phoneVerified: true` — they
 
 ---
 
-## 4. Start the stack
+## 4. Local pre-deploy guard (no cloud)
+
+Before any Cloud Run deployment, run this local guard:
+
+```bash
+pnpm check:web-auth-base
+```
+
+What it checks:
+
+- Builds `@gigs/web` in production mode locally.
+- Fails if compiled auth calls (`/auth/login`, `/auth/register`, `/auth/verify-otp`, `/auth/refresh`, `/auth/resend-otp`, `/auth/me`) are hardwired to `localhost:3001`.
+
+This catches the exact regression class that causes hosted login to show a network error while local dev appears fine.
+
+## 5. Start the stack
 
 Open two terminal windows:
 
