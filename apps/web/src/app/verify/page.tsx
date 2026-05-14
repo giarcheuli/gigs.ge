@@ -17,8 +17,6 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { apiFetch, silentRefresh } from '@/lib/api';
 
-const BASE = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001').replace(/\/$/, '');
-
 export default function VerifyPage() {
   const router = useRouter();
   const { user, loading, refreshUser } = useAuth();

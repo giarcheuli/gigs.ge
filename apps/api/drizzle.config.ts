@@ -1,24 +1,26 @@
 import { defineConfig } from 'drizzle-kit';
 
-// Mirrors the logic in src/config/env.ts so drizzle-kit CLI commands
-// (push, generate, migrate, studio) work in both local and Cloud Run contexts.
-const buildDatabaseUrl = (): string => {
-  const instanceConnectionName = process.env.INSTANCE_CONNECTION_NAME;
-  if (instanceConnectionName) {
-    const password = process.env.DB_PASSWORD;
-    if (!password) throw new Error('DB_PASSWORD is required when INSTANCE_CONNECTION_NAME is set');
-    return `postgresql://postgres:${encodeURIComponent(password)}@/gigsge?host=/cloudsql/${instanceConnectionName}`;
-  }
-  const url = process.env.DATABASE_URL;
-  if (!url) throw new Error('DATABASE_URL is required');
-  return url;
-};
-
+// When INSTANCE_CONNECTION_NAME is set (Cloud Run + Cloud SQL Auth Proxy),
+// pass connection parameters directly so drizzle-kit never tries to parse
+// a unix socket path as a URL — Node.js URL parser rejects it with ERR_INVALID_URL.
+// Fall back to DATABASE_URL for local dev and Docker Compose.
 export default defineConfig({
-  schema: './src/db/schema/index.ts',
+  // drizzle-kit's CJS bundler can't resolve `.js` extension re-exports in the barrel
+  // index.ts, so point it at the individual schema files directly.
+  // In production the source is compiled; use dist/ output there.
+  schema: process.env.NODE_ENV === 'production'
+    ? './dist/db/schema/*.js'
+    : './src/db/schema/*.ts',
   out: './drizzle',
   dialect: 'postgresql',
-  dbCredentials: {
-    url: buildDatabaseUrl(),
-  },
+  dbCredentials: process.env.INSTANCE_CONNECTION_NAME
+    ? {
+        host: `/cloudsql/${process.env.INSTANCE_CONNECTION_NAME}`,
+        user: 'postgres',
+        password: process.env.DB_PASSWORD,
+        database: 'gigsge',
+      }
+    : {
+        url: process.env.DATABASE_URL!,
+      },
 });

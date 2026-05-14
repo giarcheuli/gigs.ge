@@ -34,6 +34,12 @@ interface Gig {
   createdAt: string;
 }
 
+interface MyApplication {
+  id: string;
+  gigId: string;
+  status: string;
+}
+
 function priceLabel(gig: Gig, isVerified: boolean): string {
   if (gig.priceType === 'negotiable') return '💬 Negotiable';
   if (gig.visPrice === 'public' || isVerified) {
@@ -66,6 +72,20 @@ export default function GigBoardPage() {
       return body.data;
     },
   });
+
+  // Fetch user's applications to show "Application pending" badges
+  const { data: myApplications = [] } = useQuery<MyApplication[]>({
+    queryKey: ['my-applications'],
+    queryFn: async () => {
+      const res = await apiFetch('/applications/mine');
+      if (!res.ok) return [];
+      const body = (await res.json()) as { data: Array<{ id: string; gig: { id: string }; status: string }> };
+      return body.data.map(a => ({ id: a.id, gigId: a.gig.id, status: a.status }));
+    },
+    enabled: isVerified,
+  });
+
+  const myApplicationsByGigId = new Map(myApplications.map(a => [a.gigId, a.status]));
 
   return (
     <main className="min-h-screen bg-gray-50">
@@ -121,20 +141,30 @@ export default function GigBoardPage() {
 
         {data && data.length > 0 && (
           <div className="space-y-3">
-            {data.map((gig) => (
-              <Link
-                key={gig.id}
-                href={`/gigs/${gig.id}`}
-                className="block bg-white rounded-xl p-5 border border-gray-100 hover:border-brand-200 hover:shadow-sm transition-all"
-              >
-                <p className="font-semibold text-gray-900 line-clamp-2">{gig.shortDescription}</p>
-                <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-gray-500">
-                  <span>📍 {REGION_NAMES[gig.regionId] ?? `Region ${gig.regionId}`}</span>
-                  <span>{priceLabel(gig, isVerified)}</span>
-                  <span className="ml-auto text-xs">{expiryLabel(gig.expiresAt)}</span>
-                </div>
-              </Link>
-            ))}
+            {data.map((gig) => {
+              const myApplicationStatus = myApplicationsByGigId.get(gig.id);
+              return (
+                <Link
+                  key={gig.id}
+                  href={`/gigs/${gig.id}`}
+                  className="block bg-white rounded-xl p-5 border border-gray-100 hover:border-brand-200 hover:shadow-sm transition-all"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="font-semibold text-gray-900 line-clamp-2">{gig.shortDescription}</p>
+                    {myApplicationStatus && (
+                      <span className="shrink-0 rounded-full bg-yellow-100 px-2 py-1 text-xs font-medium text-yellow-700 whitespace-nowrap">
+                        ✓ Applied
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-gray-500">
+                    <span>📍 {REGION_NAMES[gig.regionId] ?? `Region ${gig.regionId}`}</span>
+                    <span>{priceLabel(gig, isVerified)}</span>
+                    <span className="ml-auto text-xs">{expiryLabel(gig.expiresAt)}</span>
+                  </div>
+                </Link>
+              );
+            })}
           </div>
         )}
       </div>

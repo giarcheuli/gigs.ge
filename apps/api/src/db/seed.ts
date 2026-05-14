@@ -84,7 +84,7 @@ const CITIES_BY_REGION: Record<string, Array<{ nameEn: string; nameKa: string }>
   ],
 };
 
-async function seed() {
+export async function seedRegions() {
   console.log('Seeding regions and cities...');
 
   // Insert regions
@@ -125,10 +125,12 @@ async function seed() {
 
   console.log(`Inserted ${cityCount} cities`);
   console.log('Seed complete.');
-  process.exit(0);
 }
 
-seed().catch((err) => {
-  console.error('Seed failed:', err);
-  process.exit(1);
-});
+// Run directly (tsx src/db/seed.ts)
+if (import.meta.url === `file://${process.argv[1]}`) {
+  seedRegions().then(() => process.exit(0)).catch((err) => {
+    console.error('Seed failed:', err);
+    process.exit(1);
+  });
+}

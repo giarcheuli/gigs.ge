@@ -7,8 +7,8 @@ import {
   integer,
   timestamp,
 } from 'drizzle-orm/pg-core';
-import { users } from './users.js';
-import { contracts } from './contracts.js';
+import { users } from './users';
+import { contracts } from './contracts';
 
 export const billingLedger = pgTable('billing_ledger', {
   id: uuid('id').primaryKey().defaultRandom(),

@@ -17,7 +17,7 @@ import { registerSchema } from '@gigs/shared/schemas';
 import { z } from 'zod';
 import { useAuth } from '@/lib/auth-context';
 import type { AuthUser } from '@/lib/auth-context';
-import { setAccessToken } from '@/lib/api';
+import { API_BASE, setAccessToken } from '@/lib/api';
 
 const formSchema = registerSchema
   .extend({ confirmPassword: z.string() })
@@ -43,8 +43,6 @@ const formSchema = registerSchema
 
 type FormData = z.infer<typeof formSchema>;
 
-const BASE = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001').replace(/\/$/, '');
-
 export default function RegisterPage() {
   const router = useRouter();
   const { login } = useAuth();
@@ -56,14 +54,14 @@ export default function RegisterPage() {
     handleSubmit,
     setError,
     formState: { errors },
-  } = useForm<FormData>({ resolver: zodResolver(formSchema) });
+  } = useForm<FormData>({ resolver: zodResolver(formSchema), mode: 'onBlur' });
 
   async function onSubmit(data: FormData) {
     setServerError(null);
     setIsSubmitting(true);
 
     try {
-      const res = await fetch(`${BASE}/api/v1/auth/register`, {
+      const res = await fetch(`${API_BASE}/api/v1/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -113,6 +111,9 @@ export default function RegisterPage() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-6">
       <div className="w-full max-w-sm">
+        <Link href="/" className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-brand-600 mb-4">
+          ← Back
+        </Link>
         <h1 className="text-2xl font-bold text-brand-700 mb-1">Create account</h1>
         <p className="text-sm text-gray-500 mb-6">
           Already have one?{' '}
@@ -137,14 +138,30 @@ export default function RegisterPage() {
             />
           </Field>
 
-          <Field label="Mobile number (E.164, e.g. +995599123456)" error={errors.phone?.message}>
-            <input
-              {...register('phone')}
-              type="tel"
-              autoComplete="tel"
-              placeholder="+995"
-              className={inputCls(!!errors.phone)}
-            />
+          <Field label="Mobile number" error={errors.phone?.message}>
+            <div className="flex">
+              <span className="inline-flex items-center px-3 py-2 rounded-l-md border border-r-0 border-gray-300 bg-gray-50 text-sm text-gray-600 select-none">
+                🇬🇪 +995
+              </span>
+              <input
+                {...register('phone', {
+                  setValueAs: (v: string) => {
+                    const digits = v.replace(/\D/g, '').slice(0, 9);
+                    return digits ? `+995${digits}` : '';
+                  },
+                })}
+                type="tel"
+                autoComplete="tel"
+                placeholder="555 123 456"
+                maxLength={11}
+                onKeyDown={(e) => {
+                  if (!/[\d\s\b]/.test(e.key) && !['Backspace','Delete','Tab','ArrowLeft','ArrowRight'].includes(e.key)) {
+                    e.preventDefault();
+                  }
+                }}
+                className={`flex-1 rounded-l-none ${inputCls(!!errors.phone)}`}
+              />
+            </div>
           </Field>
 
           <Field label="Date of birth" error={errors.dateOfBirth?.message}>
@@ -155,7 +172,7 @@ export default function RegisterPage() {
             />
           </Field>
 
-          <Field label="Password" error={errors.password?.message}>
+          <Field label="Create New Password" error={errors.password?.message}>
             <input
               {...register('password')}
               type="password"
@@ -164,7 +181,7 @@ export default function RegisterPage() {
             />
           </Field>
 
-          <Field label="Confirm password" error={errors.confirmPassword?.message}>
+          <Field label="Confirm New Password" error={errors.confirmPassword?.message}>
             <input
               {...register('confirmPassword')}
               type="password"

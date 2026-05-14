@@ -16,11 +16,9 @@ import { loginSchema } from '@gigs/shared/schemas';
 import { z } from 'zod';
 import { useAuth } from '@/lib/auth-context';
 import type { AuthUser } from '@/lib/auth-context';
-import { setAccessToken } from '@/lib/api';
+import { API_BASE, setAccessToken } from '@/lib/api';
 
 type FormData = z.infer<typeof loginSchema>;
-
-const BASE = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001').replace(/\/$/, '');
 
 function LoginForm() {
   const router = useRouter();
@@ -33,14 +31,14 @@ function LoginForm() {
     register,
     handleSubmit,
     formState: { errors },
-  } = useForm<FormData>({ resolver: zodResolver(loginSchema) });
+  } = useForm<FormData>({ resolver: zodResolver(loginSchema), mode: 'onBlur' });
 
   async function onSubmit(data: FormData) {
     setServerError(null);
     setIsSubmitting(true);
 
     try {
-      const res = await fetch(`${BASE}/api/v1/auth/login`, {
+      const res = await fetch(`${API_BASE}/api/v1/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -126,6 +124,9 @@ export default function LoginPage() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-6">
       <div className="w-full max-w-sm">
+        <Link href="/" className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-brand-600 mb-4">
+          ← Back
+        </Link>
         <h1 className="text-2xl font-bold text-brand-700 mb-1">Sign in</h1>
         <p className="text-sm text-gray-500 mb-6">
           New here?{' '}

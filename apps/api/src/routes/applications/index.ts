@@ -3,7 +3,7 @@ import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { createApplicationSchema } from '@gigs/shared/schemas';
 import { db } from '../../db/index.js';
-import { applications, contracts, gigs } from '../../db/schema/index.js';
+import { applications, contracts, gigs, notifications } from '../../db/schema/index.js';
 import { requireAuth, requireVerified } from '../../middleware/guards.js';
 
 const gigIdParamsSchema = z.object({ id: z.string().uuid() });
@@ -42,6 +42,18 @@ export async function applicationsRoutes(app: FastifyInstance) {
       message: body.message ?? null,
       status: 'pending',
     }).returning();
+
+    // Create notification for the gig poster
+    await db.insert(notifications).values({
+      recipientId: gig.posterId,
+      type: 'application_submitted',
+      payload: {
+        applicationId: application.id,
+        gigId: gig.id,
+        gigName: gig.shortDescription,
+        applicantId: request.user.sub,
+      },
+    });
 
     return reply.status(201).send({ application });
   });

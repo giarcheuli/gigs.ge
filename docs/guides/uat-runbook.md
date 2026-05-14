@@ -53,6 +53,17 @@ cp apps/web/.env.example apps/web/.env.local
 
 The default `NEXT_PUBLIC_API_URL=http://localhost:3001` is correct for local UAT — no changes needed.
 
+### Cloud Run note (important)
+
+For Cloud Run builds, the web bundle is compiled with `NEXT_PUBLIC_API_URL` from Cloud Build substitution `_API_URL`.
+
+Set trigger substitutions to hosted URLs, not localhost:
+
+- `_API_URL=https://gigsge-api-723467137798.us-central1.run.app`
+- `_FRONTEND_URL=https://gigsge-web-723467137798.us-central1.run.app`
+
+The web auth screens (`/login`, `/register`, `/verify`) and shared API helper use a production safeguard: if `_API_URL` is missing or points to localhost, they fall back to the hosted API URL above so authentication does not break in UAT.
+
 ---
 
 ## 3. Database setup
@@ -82,7 +93,22 @@ All three accounts have `emailVerified: true` and `phoneVerified: true` — they
 
 ---
 
-## 4. Start the stack
+## 4. Local pre-deploy guard (no cloud)
+
+Before any Cloud Run deployment, run this local guard:
+
+```bash
+pnpm check:web-auth-base
+```
+
+What it checks:
+
+- Builds `@gigs/web` in production mode locally.
+- Fails if compiled auth calls (`/auth/login`, `/auth/register`, `/auth/verify-otp`, `/auth/refresh`, `/auth/resend-otp`, `/auth/me`) are hardwired to `localhost:3001`.
+
+This catches the exact regression class that causes hosted login to show a network error while local dev appears fine.
+
+## 5. Start the stack
 
 Open two terminal windows:
 

@@ -5,8 +5,8 @@ import {
   integer,
   timestamp,
 } from 'drizzle-orm/pg-core';
-import { users } from './users.js';
-import { regions, cities } from './regions.js';
+import { users } from './users';
+import { regions, cities } from './regions';
 
 export const userProfiles = pgTable('user_profiles', {
   userId: uuid('user_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),

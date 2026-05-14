@@ -6,8 +6,8 @@ import {
   timestamp,
   unique,
 } from 'drizzle-orm/pg-core';
-import { users } from './users.js';
-import { gigs } from './gigs.js';
+import { users } from './users';
+import { gigs } from './gigs';
 
 export const otpCodes = pgTable('otp_codes', {
   id: uuid('id').primaryKey().defaultRandom(),

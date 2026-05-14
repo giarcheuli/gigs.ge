@@ -9,6 +9,7 @@ import { gigsRoutes } from './routes/gigs/index.js';
 import { applicationsRoutes } from './routes/applications/index.js';
 import { contractsRoutes } from './routes/contracts/index.js';
 import { regionsRoutes } from './routes/regions/index.js';
+import { notificationsRoutes } from './routes/notifications/index.js';
 
 export async function buildApp() {
   const app = Fastify({
@@ -58,10 +59,7 @@ export async function buildApp() {
   await app.register(applicationsRoutes, { prefix: '/api/v1/applications' });
   await app.register(contractsRoutes, { prefix: '/api/v1/contracts' });
   await app.register(regionsRoutes, { prefix: '/api/v1/regions' });
-  // await app.register(userRoutes, { prefix: '/api/v1/users' });
-  // await app.register(notificationRoutes, { prefix: '/api/v1/notifications' });
-  // await app.register(messageRoutes, { prefix: '/api/v1/messages' });
-  // await app.register(adminRoutes, { prefix: '/api/v1/admin' });
+  await app.register(notificationsRoutes, { prefix: '/api/v1/notifications' });
 
   return app;
 }

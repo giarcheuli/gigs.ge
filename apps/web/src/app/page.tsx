@@ -38,7 +38,7 @@ export default function HomePage() {
                 </Link>
                 <Link
                   href="/login"
-                  className="text-sm text-gray-500 hover:text-brand-600 transition-colors"
+                  className="rounded-lg border border-gray-300 px-6 py-3 font-semibold text-gray-600 hover:bg-gray-50 transition-colors"
                 >
                   Sign in
                 </Link>

@@ -7,9 +7,9 @@ import {
   boolean,
   timestamp,
 } from 'drizzle-orm/pg-core';
-import { users } from './users.js';
-import { gigs } from './gigs.js';
-import { applications } from './applications.js';
+import { users } from './users';
+import { gigs } from './gigs';
+import { applications } from './applications';
 
 export const contracts = pgTable('contracts', {
   id: uuid('id').primaryKey().defaultRandom(),

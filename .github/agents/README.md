@@ -65,6 +65,25 @@ Use this agent when you need to:
 @documentation-handoff-agent update the architecture docs to reflect the new billing ledger implementation
 ```
 
+### 5. Cybersecurity & Coherence Agent
+**File:** `cybersecurity-agent.agent.md`  
+**When to invoke:** After every code commit, before PR merge
+
+Use this agent when you need to:
+- Review code changes for security vulnerabilities (auth, data handling, injection)
+- Validate adherence to business rules and architectural patterns
+- Check for OWASP Top 10 risks, secrets leaks, dependency vulns
+- Ensure changes are coherent with project design and constraints
+- **Output:** Either PASS (ready to merge) or VETO (with specific remediation steps)
+
+**Example invocation:**
+```
+/security-coherence approve feat/uat-auth-screens
+/security-coherence veto --reason "found hardcoded secret in config"
+```
+
+**Integration:** This agent is mandatory in the commit flow. See [Project Coherence Framework](../../docs/guides/project-coherence-framework.md) for when to invoke and how to interpret PASS/VETO.
+
 ## Session Management
 
 ### Starting a Session
@@ -141,6 +160,12 @@ Each agent provides structured output:
 - Key state captured
 - Unresolved assumptions
 
+**Cybersecurity & Coherence Agent:**
+- Decision: PASS or VETO
+- Security checks run (auth, data validation, secrets, business logic, dependencies)
+- Issues found with specific locations and severity
+- Remediation steps for any VETO items
+
 ## Best Practices
 
 1. **One agent per concern** - Don't ask the test agent to implement features
@@ -153,6 +178,7 @@ Each agent provides structured output:
 
 - [Custom AI Agents Guide](../../docs/guides/custom-ai-agents.md) - Design principles
 - [Agent Skills Map](../../docs/guides/agent-skills-map.md) - Document consultation rules
+- [Project Coherence Framework](../../docs/guides/project-coherence-framework.md) - Security & coherence review process
 - [UAT Readiness Handoff](../../docs/guides/uat-readiness-handoff.md) - Current status
 - [System Design](../../SYSTEM_DESIGN.md) - Product specification
 
