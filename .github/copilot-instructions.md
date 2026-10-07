@@ -40,10 +40,10 @@ See [SYSTEM_DESIGN.md](../SYSTEM_DESIGN.md) for the full specification.
 - Use Mermaid for state machines and flow diagrams
 
 ## Branching and SDLC Rules
-- The canonical integration branch is `main` (the first-slice branch `uat/first-slice` was fully merged via PR #14 and retired on 2026-10-07).
+- Two-tier ladder since 2026-10-07: `dev` (integration, auto-deploys https://dev.gigs.ge) → `main` (stable/UAT, auto-deploys https://uat.gigs.ge). `uat/first-slice` is retired.
+- All new feature, fix, and doc slices branch from `dev` and merge back into it via reviewed PR; promote `dev` → `main` when verified on dev.gigs.ge.
+- Treat `copilot/*` branches as temporary intake branches. Merge or cherry-pick useful work into `dev` quickly via a task branch and PR.
 - Do not continue feature work from stale milestone branches when a newer integration branch exists.
-- Treat `copilot/*` branches as temporary intake branches. Merge or cherry-pick useful work into `main` quickly via a task branch and PR, then continue from `main` or a fresh task branch.
-- All new feature, fix, and doc slices should branch from `main` and merge back into it via reviewed PR.
 - Before coding, read the branch and workflow policy in `/docs/guides/branching-and-sdlc.md` together with the current UAT handoff and backlog.
 - Delivery priority order: UAT deployment and stakeholder docs, deal-lifecycle automation (configurable timers), billing (configurable fees) and uploads, launch hardening.
 

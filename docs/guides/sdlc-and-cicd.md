@@ -14,31 +14,36 @@ day-to-day working cycle and git commands.
 | Environment | Source Branch | Purpose | Deploy Trigger |
 |---|---|---|---|
 | **Local** | any task branch | Fast feedback loop | manual — `pnpm dev` |
-| **UAT / Staging** | `main` | Stakeholder review and acceptance | automatic — Cloud Build trigger on push to `main` |
+| **Dev** | `dev` | Fresh features and fixes, may break | automatic — Cloud Build trigger `deploy-gigsge-dev` → https://dev.gigs.ge |
+| **UAT / Staging** | `main` | Stakeholder review and acceptance | automatic — Cloud Build trigger `deploy-gigsge-uat` → https://uat.gigs.ge |
+| **QA** | (future) | Pre-production verification | planned — qa.gigs.ge |
 | **Production** | `main` (tagged release) | Live users | manual release approval after tag — not yet provisioned |
 
 No environment is ever deployed from a `copilot/*` branch or a task branch.
-Only the canonical branch (`main`) feeds real environments.
+Only the canonical branches (`dev`, `main`) feed real environments.
 
 > **History note (2026-10-07):** the former integration branch `uat/first-slice` was fully
-> merged into `main` (PR #14) and retired. `main` is now the single canonical branch.
+> merged into `main` (PR #14) and retired. The `dev` branch and dev environment were added
+> the same day.
 
 ---
 
 ## Branch Lifecycle
 
 ```
-main                       ← source of truth
+dev                        ← integration branch (deploys dev.gigs.ge)
   └── feat/my-feature      ← short-lived task branch
         ↓  PR opened, CI passes, reviewed
-        └── squash-merged back into main
-              ↓  milestone boundary reached, UAT accepted
-              └── tagged release on main
+        └── squash-merged back into dev
+              ↓  verified on dev.gigs.ge
+              └── promoted to main (deploys uat.gigs.ge)
+                    ↓  milestone boundary reached, UAT accepted
+                    └── tagged release on main
 ```
 
 ### 1. Create
 
-- Always branch from `main`. Never branch from a stale branch.
+- Always branch from `dev`. Never branch from a stale branch.
 - Use a descriptive prefix and scope:
   - `feat/` — new capability
   - `fix/` — bug correction
@@ -60,7 +65,7 @@ main                       ← source of truth
 
 ### 3. Open a Pull Request
 
-- **Target**: `main` for all work.
+- **Target**: `dev` for all feature/fix work; `main` only for dev→main promotions and urgent hotfixes.
 - **Title**: matches the conventional commit format.
 - **Description** must state:
   1. What changed
@@ -74,8 +79,9 @@ main                       ← source of truth
 
 | Source → Target | Strategy | Reason |
 |---|---|---|
-| task branch → `main` | **Squash merge** | Keeps integration history readable; one logical commit per slice |
-| milestone boundary | **Tag on `main`** | Marks releases without a second long-lived branch |
+| task branch → `dev` | **Squash merge** | Keeps integration history readable; one logical commit per slice |
+| `dev` → `main` | **Merge commit (promotion)** | Preserves what was promoted and when |
+| milestone boundary | **Tag on `main`** | Marks releases without extra branches |
 
 Never use rebase-and-merge on shared branches. It rewrites history others may have pulled.
 
@@ -108,7 +114,7 @@ Apply these settings in GitHub → Settings → Branches.
 
 ## CI Pipeline
 
-CI runs automatically on every PR targeting `main`.
+CI runs automatically on every PR targeting `dev` or `main`.
 The pipeline lives in `.github/workflows/ci.yml`.
 
 ```
@@ -133,10 +139,14 @@ A PR cannot be merged if any step fails. This is enforced by branch protection, 
 
 | Stage | Trigger | Target |
 |---|---|---|
-| UAT / Staging | Push/merge to `main` | Cloud Run (`gigsge-api`, `gigsge-web`), via Cloud Build trigger `deploy-gigsge-uat` — **live since 2026-10-07** |
+| Dev | Push/merge to `dev` | Cloud Run (`gigsge-api-dev`, `gigsge-web-dev`) → https://dev.gigs.ge — live since 2026-10-07 |
+| UAT / Staging | Push/merge to `main` | Cloud Run (`gigsge-api`, `gigsge-web`) → https://uat.gigs.ge — live since 2026-10-07 |
 | Production | Manual approval after version tag | Production environment — not yet provisioned |
 
-After each UAT deploy, run `scripts/smoke-check.ps1` (Windows) or `scripts/smoke-check.sh` (Linux/macOS) against the live URLs.
+Both environments share one parameterized `cloudbuild.yaml`; each trigger supplies its own
+service names, database name (`gigsge` / `gigsge_dev`), URLs, and secrets.
+
+After each deploy, run `scripts/smoke-check.ps1` (Windows) or `scripts/smoke-check.sh` (Linux/macOS) against the environment's URLs.
 
 ---
 
@@ -170,13 +180,13 @@ post-hardening sprint).
 
 The following are hard rules, not suggestions:
 
-- Direct commits to `main` without a PR.
+- Direct commits to `dev` or `main` without a PR (promotions from `dev` to `main` excepted).
 - Merging a PR while CI is failing.
 - Leaving merged branches alive on `origin`.
 - Deploying to any environment from a task branch or `copilot/*` branch.
-- Using `--force` or `--force-with-lease` on `main`.
+- Using `--force` or `--force-with-lease` on `dev` or `main`.
 - Treating a diff review as a substitute for running the test suite.
-- Branching from anything other than up-to-date `main` for new work.
+- Branching from anything other than up-to-date `dev` for new work.
 
 ---
 

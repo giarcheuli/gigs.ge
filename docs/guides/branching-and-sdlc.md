@@ -4,25 +4,46 @@ This guide defines how work should move through the repository as the team drive
 
 The goal is simple: one visible integration branch, one smallest slice at a time, and no ambiguity about which branch reflects the current product state.
 
-> **History note (2026-10-07):** `uat/first-slice` was the integration branch for the first UAT slice. It was fully merged into `main` via PR #14 and is now retired. `main` is the canonical branch for all ongoing work.
+> **History note (2026-10-07):** `uat/first-slice` was the integration branch for the first UAT slice. It was fully merged into `main` via PR #14 and is now retired. Later the same day the `dev` branch and dev environment were introduced, creating the current two-tier ladder.
 
 ## Canonical Branches
 
-### `main`
+### `dev`
 
-Use `main` as both the stable baseline and the canonical integration branch.
+Use `dev` as the integration branch for fresh work. Every merge auto-deploys to **https://dev.gigs.ge**.
 
 Rules:
 
-1. This is the source of truth for current product state.
-2. Backlog, handoff, and README state must reflect this branch.
-3. All new task branches start from here and merge back here via PR.
-4. Do not commit exploratory or agent-driven accumulation directly to `main`; always use a task branch.
-5. If a cloud or Copilot branch contains useful work, merge or cherry-pick it here quickly.
+1. All new task branches start from `dev` and merge back into it via PR.
+2. `dev` may be broken at any time — it is the proving ground, not the showroom.
+3. The dev environment has its own database (`gigsge_dev`); wiping or reseeding it is always acceptable.
+
+### `main`
+
+Use `main` as the stable/UAT tier. Every merge auto-deploys to **https://uat.gigs.ge**.
+
+Rules:
+
+1. This is the source of truth for the stakeholder-visible product state.
+2. `main` only receives promotions from `dev` (or urgent hotfixes via task branch + PR).
+3. Backlog, handoff, and README state must reflect this branch.
+4. Never commit directly to `main`; promote or PR.
+
+### Promotion
+
+```
+feature branch → dev → auto-deploys dev.gigs.ge     (fresh work, may break)
+                  ↓ verified on dev.gigs.ge
+                main → auto-deploys uat.gigs.ge      (stable, stakeholder-facing)
+                  ↓ future
+                qa.gigs.ge → production gigs.ge
+```
+
+Promote with a PR from `dev` into `main` (or `git merge --ff-only dev` when histories align).
 
 ### Task Branches
 
-Create short-lived task branches from `main`.
+Create short-lived task branches from `dev`.
 
 Examples:
 
@@ -35,7 +56,7 @@ Rules:
 
 1. One branch should serve one smallest meaningful slice.
 2. Do not mix unrelated workstreams on the same task branch.
-3. Merge task branches back into `main` via a reviewed PR; never push task work directly to `main`.
+3. Merge task branches back into `dev` via a reviewed PR; never push task work directly to `dev` or `main`.
 
 ## Cloud and Agent Branches
 
@@ -64,14 +85,15 @@ Do not widen scope just because the schema supports more than the current slice.
 Every coding task should follow this loop:
 
 1. Fetch remotes and confirm the canonical integration branch.
-2. Switch to `main`.
+2. Switch to `dev`.
 3. Pull the latest remote state with fast-forward only.
 4. Create one short-lived task branch.
 5. Implement one smallest meaningful slice.
 6. Run the narrowest useful executable validation.
 7. Update the smallest truthful docs needed for the change.
-8. Merge the task branch back into `main` via PR.
-9. Refresh the handoff and backlog if current-state claims changed.
+8. Merge the task branch back into `dev` via PR; verify on dev.gigs.ge.
+9. Promote `dev` → `main` when the slice is UAT-ready.
+10. Refresh the handoff and backlog if current-state claims changed.
 
 ## Validation Rules
 
@@ -115,24 +137,33 @@ Use this for normal day-to-day work.
 
 ```bash
 git fetch origin
-git switch main
-git pull --ff-only origin main
+git switch dev
+git pull --ff-only origin dev
 ```
 
 ### Start a New Task Branch
 
 ```bash
+git switch dev
+git pull --ff-only origin dev
+git switch -c feat/my-task-name
+```
+
+### Promote dev to UAT
+
+```bash
 git switch main
 git pull --ff-only origin main
-git switch -c feat/my-task-name
+git merge --no-ff dev -m "promote: dev -> main"
+git push origin main
 ```
 
 ### Merge an Agent Branch into the Canonical Integration Branch
 
 ```bash
 git fetch origin
-git switch main
-git pull --ff-only origin main
+git switch dev
+git pull --ff-only origin dev
 git merge --no-ff origin/copilot/some-branch
 ```
 
@@ -140,7 +171,7 @@ git merge --no-ff origin/copilot/some-branch
 
 ```bash
 git fetch origin
-git switch main
+git switch dev
 git cherry-pick <commit-sha>
 ```
 
