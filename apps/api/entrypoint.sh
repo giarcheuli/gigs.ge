@@ -11,4 +11,5 @@ echo "▶ Seeding UAT accounts (idempotent)..."
 pnpm db:seed:uat
 
 echo "▶ Starting API server..."
-exec node dist/server.js
+# tsx tolerates extensionless ESM imports; compiled dist crashes under plain node (see backlog m4_hardening)
+exec pnpm exec tsx src/server.ts

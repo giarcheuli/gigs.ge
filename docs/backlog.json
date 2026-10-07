@@ -240,6 +240,13 @@
       "notes": "All routes consistently emit the { error, statusCode } shape. App-level setErrorHandler is wired in apps/api/src/app.ts so Zod and unhandled errors are normalized. If individual endpoints later need richer error payloads (field-level details, codes), revisit as a uat_hardening item."
     },
     {
+      "task": "Fix ESM module resolution in apps/api so the compiled dist runs under plain node (add explicit .js extensions or bundle), then revert the tsx-based production entrypoint workaround.",
+      "priority": "medium",
+      "status": "not_started",
+      "phase": "m4_hardening",
+      "notes": "Discovered 2026-10-07: first real Cloud Run deploy of the API crashed with ERR_MODULE_NOT_FOUND; entrypoint.sh now starts via tsx as a workaround."
+    },
+    {
       "task": "Implement logging for critical errors (e.g., token verification failures).",
       "priority": "medium",
       "status": "not_started",
