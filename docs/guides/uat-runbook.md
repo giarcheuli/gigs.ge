@@ -59,11 +59,12 @@ For Cloud Run builds, the web bundle is compiled with `NEXT_PUBLIC_API_URL` from
 
 Set trigger substitutions to hosted URLs, not localhost (fixed 2026-10-07):
 
-- `_API_URL=https://gigsge-api-prgt7kqx2q-uc.a.run.app`
-- `_FRONTEND_URL=https://gigsge-web-prgt7kqx2q-uc.a.run.app`
+- `_API_URL=https://api.uat.gigs.ge`
+- `_FRONTEND_URL=https://uat.gigs.ge`
 
-Custom domains `uat.gigs.ge` (web) and `api.uat.gigs.ge` (API) are mapped and awaiting
-certificate provisioning; once live, the substitutions should switch to those URLs.
+Custom domains are live as of 2026-10-07: **https://uat.gigs.ge** (web, the URL to give testers)
+and **https://api.uat.gigs.ge** (API). DNS is hosted on Cloudflare (records must stay “DNS only”);
+the underlying Cloud Run URLs (gigsge-web/gigsge-api …run.app) keep working as fallbacks.
 
 The web auth screens (`/login`, `/register`, `/verify`) and shared API helper use a production safeguard: if `_API_URL` is missing or points to localhost, they fall back to the hosted API URL above so authentication does not break in UAT.
 

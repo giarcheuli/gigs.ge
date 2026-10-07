@@ -71,10 +71,10 @@
         "Smoke check script at scripts/smoke-check.sh — 6 checks covering health, auth, gigs, regions",
         "Cloud Build trigger fixed (2026-10-07): _API_URL/_FRONTEND_URL set to real Cloud Run URLs, watches main, JWT secrets rotated",
         "API ESM startup crash fixed and deployed; Cloud Run live at gigsge-web/gigsge-api (2026-10-07)",
-        "Smoke check passed 6/6 against live Cloud Run URLs (2026-10-07, scripts/smoke-check.ps1 added for Windows)"
+        "Smoke check passed 6/6 against live Cloud Run URLs (2026-10-07, scripts/smoke-check.ps1 added for Windows)",
+        "Custom domain live (2026-10-07): uat.gigs.ge → web, api.uat.gigs.ge → API; Cloudflare DNS; smoke check 6/6 against new URLs"
       ],
       "remaining": [
-        "Finish custom domain mapping: uat.gigs.ge + api.uat.gigs.ge (DNS + mappings done, awaiting Google certificate provisioning; then update trigger URLs and redeploy)",
         "Stakeholder user guides (step-by-step for poster and worker roles) — postponed by user",
         "FAQ for trust model and fee structure — postponed by user"
       ],
