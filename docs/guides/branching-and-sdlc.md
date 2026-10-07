@@ -1,35 +1,28 @@
 # Branching and SDLC Guide
 
-This guide defines how work should move through the repository while the team is driving toward the first credible UAT slice.
+This guide defines how work should move through the repository as the team drives toward launch.
 
 The goal is simple: one visible integration branch, one smallest slice at a time, and no ambiguity about which branch reflects the current product state.
+
+> **History note (2026-10-07):** `uat/first-slice` was the integration branch for the first UAT slice. It was fully merged into `main` via PR #14 and is now retired. `main` is the canonical branch for all ongoing work.
 
 ## Canonical Branches
 
 ### `main`
 
-Use `main` as the stable baseline.
+Use `main` as both the stable baseline and the canonical integration branch.
 
 Rules:
 
-1. Do not use `main` for exploratory or agent-driven accumulation.
-2. Merge into `main` only when a slice or milestone is coherent and validated.
-3. Treat `main` as the last trustworthy checkpoint for the broader repo.
-
-### `uat/first-slice`
-
-Use `uat/first-slice` as the canonical integration branch for the first stakeholder UAT journey.
-
-Rules:
-
-1. This is the source of truth for current UAT progress.
+1. This is the source of truth for current product state.
 2. Backlog, handoff, and README state must reflect this branch.
-3. All new delivery branches start from here.
-4. If a cloud or Copilot branch contains useful work, merge or cherry-pick it here quickly.
+3. All new task branches start from here and merge back here via PR.
+4. Do not commit exploratory or agent-driven accumulation directly to `main`; always use a task branch.
+5. If a cloud or Copilot branch contains useful work, merge or cherry-pick it here quickly.
 
 ### Task Branches
 
-Create short-lived task branches from `uat/first-slice`.
+Create short-lived task branches from `main`.
 
 Examples:
 
@@ -42,7 +35,7 @@ Rules:
 
 1. One branch should serve one smallest meaningful slice.
 2. Do not mix unrelated workstreams on the same task branch.
-3. Merge task branches back into `uat/first-slice`, not directly into `main`.
+3. Merge task branches back into `main` via a reviewed PR; never push task work directly to `main`.
 
 ## Cloud and Agent Branches
 
@@ -51,8 +44,8 @@ Copilot or cloud branches are temporary intake branches, not long-term product b
 Rules:
 
 1. Do not treat `copilot/*` branches as the ongoing project source of truth.
-2. If a `copilot/*` branch contains useful work, integrate it into `uat/first-slice` promptly.
-3. After integration, continue work from `uat/first-slice` or a fresh task branch, not from the old `copilot/*` branch.
+2. If a `copilot/*` branch contains useful work, integrate it into `main` promptly via a task branch and PR.
+3. After integration, continue work from `main` or a fresh task branch, not from the old `copilot/*` branch.
 
 ## Delivery Order for First UAT
 
@@ -71,13 +64,13 @@ Do not widen scope just because the schema supports more than the current slice.
 Every coding task should follow this loop:
 
 1. Fetch remotes and confirm the canonical integration branch.
-2. Switch to `uat/first-slice`.
+2. Switch to `main`.
 3. Pull the latest remote state with fast-forward only.
 4. Create one short-lived task branch.
 5. Implement one smallest meaningful slice.
 6. Run the narrowest useful executable validation.
 7. Update the smallest truthful docs needed for the change.
-8. Merge the task branch back into `uat/first-slice`.
+8. Merge the task branch back into `main` via PR.
 9. Refresh the handoff and backlog if current-state claims changed.
 
 ## Validation Rules
@@ -116,40 +109,30 @@ Do not let these files describe different branch states.
 
 ## Commands
 
-### Bootstrap the Canonical Integration Branch
-
-Use this only if `origin/uat/first-slice` does not exist yet.
-
-```bash
-git fetch origin
-git switch -c uat/first-slice --track origin/copilot/define-first-uat-slice-again
-git push -u origin uat/first-slice
-```
-
 ### Sync the Canonical Integration Branch
 
-Use this for normal day-to-day work once `uat/first-slice` exists on `origin`.
+Use this for normal day-to-day work.
 
 ```bash
 git fetch origin
-git switch uat/first-slice
-git pull --ff-only origin uat/first-slice
+git switch main
+git pull --ff-only origin main
 ```
 
 ### Start a New Task Branch
 
 ```bash
-git switch uat/first-slice
-git pull --ff-only origin uat/first-slice
-git switch -c feat/uat-frontend-flow
+git switch main
+git pull --ff-only origin main
+git switch -c feat/my-task-name
 ```
 
 ### Merge an Agent Branch into the Canonical Integration Branch
 
 ```bash
 git fetch origin
-git switch uat/first-slice
-git pull --ff-only origin uat/first-slice
+git switch main
+git pull --ff-only origin main
 git merge --no-ff origin/copilot/some-branch
 ```
 
@@ -157,7 +140,7 @@ git merge --no-ff origin/copilot/some-branch
 
 ```bash
 git fetch origin
-git switch uat/first-slice
+git switch main
 git cherry-pick <commit-sha>
 ```
 
