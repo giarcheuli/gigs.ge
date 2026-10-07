@@ -12,7 +12,7 @@ const client = process.env.INSTANCE_CONNECTION_NAME
       host: `/cloudsql/${process.env.INSTANCE_CONNECTION_NAME}`,
       user: 'postgres',
       password: process.env.DB_PASSWORD,
-      database: 'gigsge',
+      database: process.env.DB_NAME ?? 'gigsge',
       max: 10,
     })
   : postgres(env.DATABASE_URL, { max: 10 });

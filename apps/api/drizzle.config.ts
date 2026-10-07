@@ -18,7 +18,7 @@ export default defineConfig({
         host: `/cloudsql/${process.env.INSTANCE_CONNECTION_NAME}`,
         user: 'postgres',
         password: process.env.DB_PASSWORD,
-        database: 'gigsge',
+        database: process.env.DB_NAME ?? 'gigsge',
       }
     : {
         url: process.env.DATABASE_URL!,
