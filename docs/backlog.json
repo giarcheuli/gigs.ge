@@ -1,10 +1,48 @@
 {
   "meta": {
-    "updatedAt": "2026-05-14",
-    "goal": "Reach a narrow but credible stakeholder UAT as soon as possible.",
-    "repoState": "local_uat_testing",
-    "summary": "Full UAT happy path is implemented end-to-end. Cloud Run is deployed (gigsge-api + gigsge-web). Local dev stack is working: db:push + db:seed:uat (now also seeds regions/cities). Several UI bugs found during local testing were fixed on 2026-05-13: Sign In button styling, register page onBlur validation, phone field +995 prefix, password field labels, back navigation, and regions dropdown (seed-uat now calls seedRegions). Latest local validation shows the frontend build and API lint pass, and the applications route integration test now passes after the targeted backend fix. Cloud Build trigger substitution _API_URL still needs manual correction in GCP Console."
+    "updatedAt": "2026-10-07",
+    "goal": "Deploy the UAT slice for stakeholder testing, then complete deal-lifecycle automation, billing, and uploads on the path to public soft launch.",
+    "repoState": "uat_deploy_pending",
+    "summary": "Full audit on 2026-10-07 confirmed the happy-path UAT slice (auth, gigs, applications, contracts, basic notifications) is implemented with mocked-DB integration tests (~1,670 lines). Branch consolidation done: uat/first-slice fully merged into main (PR #14) and retired; orphaned fix/web-auth-redirect merged 2026-10-07; main is now the canonical branch. Not yet implemented: contract timers (48h auto-complete, 14d overdue, 7d dispute auto-resolve), billing/invoicing, file uploads (R2), dispute evidence/arbitration, admin app (placeholder only), server-side contact-visibility enforcement, real email/SMS. NEW REQUIREMENT (2026-10-07): all contract timeframes and fee percentages must be runtime-configurable via a platform settings store managed from the admin panel — no hard-coded business constants. Next gate: fix Cloud Build _API_URL substitution, deploy to Cloud Run, pass smoke-check, deliver stakeholder guides + FAQ."
   },
+  "milestones": [
+    {
+      "id": "M0",
+      "name": "Reality sync & UAT deploy",
+      "status": "in_progress",
+      "exitCriteria": "Live Cloud Run URL passing scripts/smoke-check.sh; stakeholder guides and FAQ delivered; backlog and branch policy synced (done 2026-10-07)."
+    },
+    {
+      "id": "M1",
+      "name": "UAT round 1",
+      "status": "not_started",
+      "exitCriteria": "Stakeholder feedback collected and triaged; blocking bugs fixed; docs cleanup plan executed."
+    },
+    {
+      "id": "M2",
+      "name": "Deal lifecycle completion",
+      "status": "not_started",
+      "exitCriteria": "Configurable platform settings store live; BullMQ timers (48h auto-complete, 14d overdue, 7d dispute auto-resolve) reading from settings; dispute evidence + arbiter resolution working; minimal admin panel (settings editor + dispute queue); contact visibility enforced server-side."
+    },
+    {
+      "id": "M3",
+      "name": "Money & media",
+      "status": "not_started",
+      "exitCriteria": "Configurable fee split applied on completion; billing ledger; monthly invoices with sub-1-GEL carry-over; invoice viewer; R2 uploads with EXIF stripping and MIME validation."
+    },
+    {
+      "id": "M4",
+      "name": "Launch hardening",
+      "status": "not_started",
+      "exitCriteria": "Real email/SMS provider; gig search/filter/pagination; profile editing; reviews; e2e tests; CI smoke gate; Georgian i18n; PWA; error logging."
+    },
+    {
+      "id": "M5",
+      "name": "Public soft launch",
+      "status": "not_started",
+      "exitCriteria": "Go/no-go review passed; launch plan executed."
+    }
+  ],
   "uatCriticalPath": [
     {
       "order": 1,
@@ -33,12 +71,12 @@
         "Smoke check script at scripts/smoke-check.sh — 6 checks covering health, auth, gigs, regions"
       ],
       "remaining": [
-        "Provision GCE VM and deploy the stack",
+        "Fix Cloud Build _API_URL trigger substitution in GCP Console and redeploy to Cloud Run",
         "Run scripts/smoke-check.sh against the live URL to gate UAT handoff",
         "Stakeholder user guides (step-by-step for poster and worker roles)",
         "FAQ for trust model and fee structure"
       ],
-      "notes": "Docker stack and smoke check are done. Only GCE provisioning and stakeholder docs remain before first UAT handoff."
+      "notes": "Docker stack and smoke check are done. Decision 2026-10-07: deploy on Cloud Run (pipeline already exists); the GCE VM option is dropped."
     }
   ],
   "uiBugs": [
@@ -102,46 +140,96 @@
       "notes": "Coverage now spans auth, gigs, applications, and the full contract lifecycle (sign/complete/dispute/cancel/quit), per PR #12. Total ~1,670 lines of test code across four files in apps/api/src/__tests__/."
     },
     {
+      "task": "Create a platform_settings store so contract timeframes (48h auto-complete, 24h grace, 14d overdue, 7d dispute auto-resolve) and fee percentages (3% poster / 2% worker) are runtime-configurable, with admin API to read and update them.",
+      "priority": "high",
+      "status": "not_started",
+      "phase": "m2_deal_lifecycle",
+      "notes": "Foundation for M2 and M3. No business constant may be hard-coded; all timers and fee logic must read from settings. Requirement added 2026-10-07."
+    },
+    {
+      "task": "Implement BullMQ background workers for contract timers: 48h auto-complete, 14-day overdue auto-complete, 7-day dispute auto-resolve — all reading timeframes from platform_settings.",
+      "priority": "high",
+      "status": "not_started",
+      "phase": "m2_deal_lifecycle"
+    },
+    {
+      "task": "Implement dispute evidence submission endpoints and arbiter resolution API (schema already exists: disputeEvidence, disputeEvidenceFiles, arbiterDecision fields).",
+      "priority": "high",
+      "status": "not_started",
+      "phase": "m2_deal_lifecycle"
+    },
+    {
+      "task": "Enforce contact-info and field visibility rules server-side in API responses (visContact etc. exist in schema but are not enforced).",
+      "priority": "high",
+      "status": "not_started",
+      "phase": "m2_deal_lifecycle"
+    },
+    {
+      "task": "Build minimal admin app: admin login, platform settings editor, dispute queue with arbiter resolution UI.",
+      "priority": "high",
+      "status": "not_started",
+      "phase": "m2_deal_lifecycle",
+      "notes": "apps/admin is currently a placeholder. Scope deliberately minimal; analytics/moderation dashboards come post-launch."
+    },
+    {
+      "task": "Implement billing ledger and fee calculation on contract completion using configurable fee percentages from platform_settings.",
+      "priority": "high",
+      "status": "not_started",
+      "phase": "m3_money_media"
+    },
+    {
+      "task": "Implement monthly invoice generation cron with sub-1.00 GEL carry-over, plus invoice viewer in web app.",
+      "priority": "high",
+      "status": "not_started",
+      "phase": "m3_money_media"
+    },
+    {
+      "task": "Finalize and test Cloudflare R2 integration for file uploads (e.g., gig images, user avatars, dispute evidence).",
+      "priority": "high",
+      "status": "not_started",
+      "phase": "m3_money_media"
+    },
+    {
+      "task": "Validate EXIF stripping and MIME type checks for uploaded files.",
+      "priority": "high",
+      "status": "not_started",
+      "phase": "m3_money_media"
+    },
+    {
+      "task": "Integrate real email and SMS providers for OTP and notifications (currently dev-mode stubs returning codes in responses).",
+      "priority": "high",
+      "status": "not_started",
+      "phase": "m4_hardening"
+    },
+    {
       "task": "Add end-to-end tests for user flows (e.g., gig poster creating a gig, worker applying, contract completion).",
       "priority": "high",
       "status": "not_started",
-      "phase": "uat_critical"
+      "phase": "m4_hardening"
     },
     {
       "task": "Test edge cases for token expiration, invalid inputs, and concurrency.",
       "priority": "medium",
       "status": "not_started",
-      "phase": "uat_hardening"
-    },
-    {
-      "task": "Finalize and test Cloudflare R2 integration for file uploads (e.g., gig images, user avatars, dispute evidence).",
-      "priority": "medium",
-      "status": "not_started",
-      "phase": "uat_scope_dependent"
-    },
-    {
-      "task": "Validate EXIF stripping and MIME type checks for uploaded files.",
-      "priority": "medium",
-      "status": "not_started",
-      "phase": "uat_scope_dependent"
+      "phase": "m4_hardening"
     },
     {
       "task": "Conduct load testing for the Fastify API to ensure scalability.",
       "priority": "low",
       "status": "not_started",
-      "phase": "post_uat"
+      "phase": "post_launch"
     },
     {
       "task": "Optimize database queries (e.g., Drizzle ORM) for high-traffic scenarios.",
       "priority": "medium",
       "status": "not_started",
-      "phase": "uat_hardening"
+      "phase": "m4_hardening"
     },
     {
       "task": "Test frontend performance for mobile-first responsiveness.",
       "priority": "medium",
       "status": "not_started",
-      "phase": "uat_hardening"
+      "phase": "m4_hardening"
     },
     {
       "task": "Standardize error responses across all API routes.",
@@ -155,19 +243,19 @@
       "task": "Implement logging for critical errors (e.g., token verification failures).",
       "priority": "medium",
       "status": "not_started",
-      "phase": "uat_hardening"
+      "phase": "m4_hardening"
     },
     {
       "task": "Add backend hooks to log user actions (e.g., gig creation, contract updates).",
       "priority": "low",
       "status": "not_started",
-      "phase": "post_uat"
+      "phase": "post_launch"
     },
     {
       "task": "Integrate a frontend analytics tool (e.g., Google Analytics, PostHog).",
       "priority": "low",
       "status": "not_started",
-      "phase": "post_uat"
+      "phase": "post_launch"
     }
   ],
   "business": [
@@ -175,37 +263,37 @@
       "task": "Create step-by-step guides for gig posters and workers (e.g., how to post a gig, how to apply for gigs).",
       "priority": "high",
       "status": "not_started",
-      "phase": "uat_critical"
+      "phase": "m0_uat_deploy"
     },
     {
       "task": "Develop a FAQ section addressing common user concerns.",
       "priority": "high",
       "status": "not_started",
-      "phase": "uat_critical"
+      "phase": "m0_uat_deploy"
     },
     {
       "task": "Define a go-to-market plan (e.g., target audience segmentation, social media campaigns).",
       "priority": "low",
       "status": "not_started",
-      "phase": "post_uat"
+      "phase": "post_launch"
     },
     {
       "task": "Create marketing assets (e.g., explainer videos, blog posts highlighting unique features).",
       "priority": "low",
       "status": "not_started",
-      "phase": "post_uat"
+      "phase": "post_launch"
     },
     {
       "task": "Develop educational content on the fee structure and dispute resolution process.",
       "priority": "medium",
       "status": "not_started",
-      "phase": "uat_hardening"
+      "phase": "m4_hardening"
     },
     {
       "task": "Host webinars or Q&A sessions for early adopters.",
       "priority": "low",
       "status": "not_started",
-      "phase": "post_uat"
+      "phase": "post_launch"
     }
   ],
   "product": [
@@ -213,43 +301,43 @@
       "task": "Finalize user-facing documentation (e.g., platform overview, contract lifecycle explanation, dispute resolution flow).",
       "priority": "high",
       "status": "not_started",
-      "phase": "uat_critical"
+      "phase": "m1_uat_round1"
     },
     {
       "task": "Add developer documentation for API usage.",
       "priority": "medium",
       "status": "not_started",
-      "phase": "uat_hardening"
+      "phase": "m4_hardening"
     },
     {
       "task": "Address remaining usability issues (e.g., simplify navigation, ensure mobile-first design is polished).",
       "priority": "high",
       "status": "not_started",
-      "phase": "uat_critical"
+      "phase": "m1_uat_round1"
     },
     {
       "task": "Conduct user testing to gather feedback on the interface.",
       "priority": "high",
       "status": "not_started",
-      "phase": "uat_critical"
+      "phase": "m1_uat_round1"
     },
     {
       "task": "Implement notifications for key events (e.g., contract updates, dispute resolution progress).",
       "priority": "medium",
       "status": "not_started",
-      "phase": "uat_scope_dependent"
+      "phase": "m2_deal_lifecycle"
     },
     {
       "task": "Add search and filtering options for gigs.",
       "priority": "medium",
       "status": "not_started",
-      "phase": "uat_scope_dependent"
+      "phase": "m4_hardening"
     },
     {
-      "task": "Build an admin dashboard to track user activity, revenue metrics, and dispute resolution statistics.",
+      "task": "Expand the admin dashboard with user activity tracking, revenue metrics, and dispute resolution statistics (beyond the minimal M2 scope).",
       "priority": "low",
       "status": "not_started",
-      "phase": "post_uat"
+      "phase": "post_launch"
     }
   ],
   "marketing": [
@@ -257,31 +345,31 @@
       "task": "Create a brand identity (e.g., logo, color scheme, typography).",
       "priority": "low",
       "status": "not_started",
-      "phase": "post_uat"
+      "phase": "post_launch"
     },
     {
       "task": "Build a landing page highlighting the platform’s value proposition.",
       "priority": "medium",
       "status": "not_started",
-      "phase": "uat_scope_dependent"
+      "phase": "m4_hardening"
     },
     {
       "task": "Launch a community forum for gig posters and workers.",
       "priority": "low",
       "status": "not_started",
-      "phase": "post_uat"
+      "phase": "post_launch"
     },
     {
       "task": "Partner with local influencers or organizations to promote the platform.",
       "priority": "low",
       "status": "not_started",
-      "phase": "post_uat"
+      "phase": "post_launch"
     },
     {
       "task": "Set up feedback loops (e.g., surveys for early adopters, in-app feedback forms).",
       "priority": "medium",
       "status": "not_started",
-      "phase": "uat_hardening"
+      "phase": "m1_uat_round1"
     }
   ]
 }
