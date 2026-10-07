@@ -15,7 +15,8 @@ const buildDatabaseUrl = (): string => {
   const instanceConnectionName = process.env.INSTANCE_CONNECTION_NAME;
   if (instanceConnectionName) {
     const password = required('DB_PASSWORD');
-    return `postgresql://postgres:${encodeURIComponent(password)}@/gigsge?host=/cloudsql/${instanceConnectionName}`;
+    const dbName = process.env.DB_NAME ?? 'gigsge';
+    return `postgresql://postgres:${encodeURIComponent(password)}@/${dbName}?host=/cloudsql/${instanceConnectionName}`;
   }
   return required('DATABASE_URL');
 };
