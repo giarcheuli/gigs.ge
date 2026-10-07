@@ -4,11 +4,11 @@
 
 ## Hard rules
 
-1. **Never commit directly to `main`.** Always work on a task branch and merge via PR. (`uat/first-slice` is retired — fully merged into `main` via PR #14.)
+1. **Never commit directly to `dev` or `main`.** Always work on a task branch and merge via PR. Task branches start from `dev` and merge into `dev`; `main` only receives promotions from `dev`. Every merge to `dev` deploys https://dev.gigs.ge; every merge to `main` deploys https://uat.gigs.ge.
 2. **One branch = one task = one PR.** No bundled changes. Out-of-scope findings become follow-up tickets, not silent fixes.
 3. **Preflight every session.** Run `bash scripts/preflight.sh <task-branch>` before writing any code. The script is the gate.
 4. **No dirty state across sessions.** End by committing, pushing as draft, or stashing with a label.
-5. **Opus PR review is mandatory** before any squash-merge into `main`.
+5. **Opus PR review is mandatory** before any squash-merge into `dev`.
 6. **Verify imports before adding them.** Every new dependency must exist in `package.json` / `pnpm-workspace.yaml`.
 
 ## Read these, in this order, before any change
@@ -41,9 +41,9 @@ For domain-specific work, read the matching skill file under `.github/skills/<ar
 5. **Local checks before pushing.** `pnpm --filter <package> lint && pnpm --filter <package> test` (or the narrowest meaningful executable validation for the change).
 6. **Self-review.** Diff against the spec. Run the coherence checklist on your code. Flag any scope drift or rule violations.
 7. **Security & coherence gate.** Push your branch, then invoke `/security-coherence approve <branch>`. Wait for PASS or VETO. If VETO, fix the issues and re-run.
-8. **Open PR.** Target `main`. Title in conventional commit format. Description must list what changed, why, and how to verify. Link the spec. Include your coherence & security checks in PR description.
+8. **Open PR.** Target `dev`. Title in conventional commit format. Description must list what changed, why, and how to verify. Link the spec. Include your coherence & security checks in PR description.
 9. **Opus review.** Run `/engineering:code-review` against the PR diff. Address findings on the same task branch.
-10. **Merge.** Squash-merge into `main`. Delete the source branch.
+10. **Merge.** Squash-merge into `dev`. Delete the source branch. Verify on dev.gigs.ge, then promote `dev` → `main` when UAT-ready.
 
 ## Sub-agent dispatch
 

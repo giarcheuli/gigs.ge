@@ -72,7 +72,8 @@
         "Cloud Build trigger fixed (2026-10-07): _API_URL/_FRONTEND_URL set to real Cloud Run URLs, watches main, JWT secrets rotated",
         "API ESM startup crash fixed and deployed; Cloud Run live at gigsge-web/gigsge-api (2026-10-07)",
         "Smoke check passed 6/6 against live Cloud Run URLs (2026-10-07, scripts/smoke-check.ps1 added for Windows)",
-        "Custom domain live (2026-10-07): uat.gigs.ge → web, api.uat.gigs.ge → API; Cloudflare DNS; smoke check 6/6 against new URLs"
+        "Custom domain live (2026-10-07): uat.gigs.ge → web, api.uat.gigs.ge → API; Cloudflare DNS; smoke check 6/6 against new URLs",
+        "Dev environment live (2026-10-07): dev branch → gigsge-api-dev/gigsge-web-dev → dev.gigs.ge + api.dev.gigs.ge, separate gigsge_dev database, parameterized cloudbuild.yaml; branching ladder now dev → main (uat) → future qa/prod"
       ],
       "remaining": [
         "Stakeholder user guides (step-by-step for poster and worker roles) — postponed by user",
