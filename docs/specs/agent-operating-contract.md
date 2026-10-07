@@ -8,7 +8,7 @@ It is the engineering counterpart to the strategic guides at [`docs/guides/branc
 
 ## Goal
 
-One ticket. One spec. One branch. One PR. One Opus review. One squash-merge into `uat/first-slice`.
+One ticket. One spec. One branch. One PR. One Opus review. One squash-merge into `main`.
 
 ## Model tiering
 
@@ -29,11 +29,11 @@ Rule of thumb: if the work has one obvious correct answer, use the cheaper model
 │    • Read the backlog item from docs/backlog.json
 │    • Run /product-management:write-spec
 │    • Save spec at docs/specs/<ticket>.md
-│    • Commit on a docs/ task branch, PR → uat/first-slice, merge
+│    • Commit on a docs/ task branch, PR → main, merge
 │
 ├─ 2. PREFLIGHT   (Claude Code CLI)
 │    • bash scripts/preflight.sh feat/<ticket>
-│      (asserts clean tree, FFs uat/first-slice, creates task branch)
+│      (asserts clean tree, FFs main, creates task branch)
 │
 ├─ 3. IMPLEMENT   (Claude Code, Sonnet)
 │    • Read spec, then read matching .github/skills/<area>/SKILL.md
@@ -46,7 +46,7 @@ Rule of thumb: if the work has one obvious correct answer, use the cheaper model
 │    • Flag any scope drift, fix it or note as a follow-up ticket
 │
 ├─ 5. OPEN PR
-│    • Target: uat/first-slice
+│    • Target: main
 │    • Title: conventional commit format
 │    • Description: what / why / how to verify
 │    • Link the spec at docs/specs/<ticket>.md
@@ -57,7 +57,7 @@ Rule of thumb: if the work has one obvious correct answer, use the cheaper model
 │    • Re-review if changes are non-trivial
 │
 └─ 7. MERGE   (squash) → delete branch
-     • main is updated only at UAT milestones, never per-ticket
+     • every merge to main auto-deploys to the UAT environment
 ```
 
 ## Sub-agent dispatch
@@ -85,9 +85,9 @@ Sub-agents do **not** receive duplicated product context inside their prompt. Th
 2. **Verify imports.** Every new dependency must already exist in `package.json` or `pnpm-workspace.yaml`. If it doesn't, the dep gets added in its own commit with a one-line justification.
 3. **One branch, one task, one PR.** No bundled changes. Out-of-scope findings → follow-up ticket, never silent fixes.
 4. **Preflight every session.** No exceptions. The script (`scripts/preflight.sh`) is the gate.
-5. **Opus review is non-optional** before merge into `uat/first-slice`. Even one-line fixes go through it.
+5. **Opus review is non-optional** before merge into `main`. Even one-line fixes go through it.
 6. **CLAUDE.md is the entry point.** Every new AI session reads it before touching files. The file points to the docs that carry product memory.
-7. **No commits to `main` or `uat/first-slice` directly.** Task branches only.
+7. **No commits to `main` directly.** Task branches only.
 
 ## Human touchpoints
 
@@ -103,5 +103,5 @@ Everything between those touchpoints is the AI's responsibility: branching, comm
 
 - Should the Opus review step become an automated CI step (e.g., a GitHub Action that posts the review as a PR comment) rather than a manual chat invocation?
 - Do we want per-area Cowork session templates that pre-load the relevant SKILL.md?
-- When does `uat/first-slice` graduate to `main`? Currently defined as "milestone boundary reached, UAT accepted" — what is the explicit checklist?
+- ~~When does `uat/first-slice` graduate to `main`?~~ Resolved 2026-10-07: `uat/first-slice` was retired; `main` is the single canonical branch and releases are tags on `main`.
 - Should sub-agent dispatch be logged somewhere durable (e.g., a `docs/agent-runs/` ledger) for traceability?

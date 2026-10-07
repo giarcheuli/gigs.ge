@@ -57,10 +57,13 @@ The default `NEXT_PUBLIC_API_URL=http://localhost:3001` is correct for local UAT
 
 For Cloud Run builds, the web bundle is compiled with `NEXT_PUBLIC_API_URL` from Cloud Build substitution `_API_URL`.
 
-Set trigger substitutions to hosted URLs, not localhost:
+Set trigger substitutions to hosted URLs, not localhost (fixed 2026-10-07):
 
-- `_API_URL=https://gigsge-api-723467137798.us-central1.run.app`
-- `_FRONTEND_URL=https://gigsge-web-723467137798.us-central1.run.app`
+- `_API_URL=https://gigsge-api-prgt7kqx2q-uc.a.run.app`
+- `_FRONTEND_URL=https://gigsge-web-prgt7kqx2q-uc.a.run.app`
+
+Custom domains `uat.gigs.ge` (web) and `api.uat.gigs.ge` (API) are mapped and awaiting
+certificate provisioning; once live, the substitutions should switch to those URLs.
 
 The web auth screens (`/login`, `/register`, `/verify`) and shared API helper use a production safeguard: if `_API_URL` is missing or points to localhost, they fall back to the hosted API URL above so authentication does not break in UAT.
 

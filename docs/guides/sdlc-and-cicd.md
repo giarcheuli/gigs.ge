@@ -14,28 +14,31 @@ day-to-day working cycle and git commands.
 | Environment | Source Branch | Purpose | Deploy Trigger |
 |---|---|---|---|
 | **Local** | any task branch | Fast feedback loop | manual — `pnpm dev` |
-| **UAT / Staging** | `uat/first-slice` | Stakeholder review and acceptance | merge to `uat/first-slice` |
-| **Production** | `main` | Live users | manual release approval after tag |
+| **UAT / Staging** | `main` | Stakeholder review and acceptance | automatic — Cloud Build trigger on push to `main` |
+| **Production** | `main` (tagged release) | Live users | manual release approval after tag — not yet provisioned |
 
 No environment is ever deployed from a `copilot/*` branch or a task branch.
-Only the two canonical branches (`uat/first-slice`, `main`) feed real environments.
+Only the canonical branch (`main`) feeds real environments.
+
+> **History note (2026-10-07):** the former integration branch `uat/first-slice` was fully
+> merged into `main` (PR #14) and retired. `main` is now the single canonical branch.
 
 ---
 
 ## Branch Lifecycle
 
 ```
-uat/first-slice            ← source of truth
+main                       ← source of truth
   └── feat/my-feature      ← short-lived task branch
         ↓  PR opened, CI passes, reviewed
-        └── squash-merged back into uat/first-slice
+        └── squash-merged back into main
               ↓  milestone boundary reached, UAT accepted
-              └── PR → main    ← merge commit, tagged release
+              └── tagged release on main
 ```
 
 ### 1. Create
 
-- Always branch from `uat/first-slice`. Never branch from `main` or a stale branch.
+- Always branch from `main`. Never branch from a stale branch.
 - Use a descriptive prefix and scope:
   - `feat/` — new capability
   - `fix/` — bug correction
@@ -57,7 +60,7 @@ uat/first-slice            ← source of truth
 
 ### 3. Open a Pull Request
 
-- **Target**: `uat/first-slice` for feature work; `main` only for milestone releases.
+- **Target**: `main` for all work.
 - **Title**: matches the conventional commit format.
 - **Description** must state:
   1. What changed
@@ -71,8 +74,8 @@ uat/first-slice            ← source of truth
 
 | Source → Target | Strategy | Reason |
 |---|---|---|
-| task branch → `uat/first-slice` | **Squash merge** | Keeps integration history readable; one logical commit per slice |
-| `uat/first-slice` → `main` | **Merge commit** | Preserves the integration history as a visible milestone |
+| task branch → `main` | **Squash merge** | Keeps integration history readable; one logical commit per slice |
+| milestone boundary | **Tag on `main`** | Marks releases without a second long-lived branch |
 
 Never use rebase-and-merge on shared branches. It rewrites history others may have pulled.
 
@@ -101,16 +104,11 @@ Apply these settings in GitHub → Settings → Branches.
 - Block force pushes
 - Block deletions
 
-### `uat/first-slice`
-- Require pull request before merging (no direct pushes)
-- Require status checks to pass: `lint`, `test`
-- Block force pushes
-
 ---
 
 ## CI Pipeline
 
-CI runs automatically on every PR targeting `uat/first-slice` or `main`.
+CI runs automatically on every PR targeting `main`.
 The pipeline lives in `.github/workflows/ci.yml`.
 
 ```
@@ -133,32 +131,27 @@ A PR cannot be merged if any step fails. This is enforced by branch protection, 
 
 ## CD Pipeline
 
-Automated deployments are not yet wired. This section describes the target state.
-
 | Stage | Trigger | Target |
 |---|---|---|
-| UAT / Staging | Merge to `uat/first-slice` | Staging environment |
-| Production | Manual approval after version tag | Production environment |
+| UAT / Staging | Push/merge to `main` | Cloud Run (`gigsge-api`, `gigsge-web`), via Cloud Build trigger `deploy-gigsge-uat` — **live since 2026-10-07** |
+| Production | Manual approval after version tag | Production environment — not yet provisioned |
 
-Until automation is in place, follow the release steps below and deploy manually.
+After each UAT deploy, run `scripts/smoke-check.ps1` (Windows) or `scripts/smoke-check.sh` (Linux/macOS) against the live URLs.
 
 ---
 
 ## Release Process
 
-A release is a promotion of `uat/first-slice` into `main` at a milestone boundary
-(e.g., end of UAT first-slice, post-hardening sprint).
+A release is a tag on `main` at a milestone boundary (e.g., end of a UAT round,
+post-hardening sprint).
 
 ```
-1. Confirm all CI checks pass on uat/first-slice.
+1. Confirm all CI checks pass on main.
 2. Confirm docs/guides/uat-readiness-handoff.md reflects current state.
-3. Open a PR: uat/first-slice → main. Title: "Release: <milestone name>"
-4. Require ≥ 1 human review and all CI status gates.
-5. Merge with merge commit (not squash — milestone history is valuable).
-6. Tag main immediately after merge:
+3. Tag main:
      git tag v<major>.<minor>.<patch>
      git push origin --tags
-7. Update uat-readiness-handoff.md with the release note and date.
+4. Update uat-readiness-handoff.md with the release note and date.
 ```
 
 ### Versioning — Semantic Versioning (semver)
@@ -177,13 +170,13 @@ A release is a promotion of `uat/first-slice` into `main` at a milestone boundar
 
 The following are hard rules, not suggestions:
 
-- Direct commits to `main` or `uat/first-slice` without a PR.
+- Direct commits to `main` without a PR.
 - Merging a PR while CI is failing.
 - Leaving merged branches alive on `origin`.
 - Deploying to any environment from a task branch or `copilot/*` branch.
-- Using `--force` or `--force-with-lease` on `main` or `uat/first-slice`.
+- Using `--force` or `--force-with-lease` on `main`.
 - Treating a diff review as a substitute for running the test suite.
-- Branching from `main` for feature work (always start from `uat/first-slice`).
+- Branching from anything other than up-to-date `main` for new work.
 
 ---
 

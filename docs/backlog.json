@@ -67,16 +67,18 @@
       "status": "in_progress",
       "completedSubtasks": [
         "UAT runbook at docs/guides/uat-runbook.md",
-        "Docker Compose stack (docker-compose.yml + Dockerfiles) on uat/first-slice — idempotent schema push + UAT seed on container start",
-        "Smoke check script at scripts/smoke-check.sh — 6 checks covering health, auth, gigs, regions"
+        "Docker Compose stack (docker-compose.yml + Dockerfiles) — idempotent schema push + UAT seed on container start",
+        "Smoke check script at scripts/smoke-check.sh — 6 checks covering health, auth, gigs, regions",
+        "Cloud Build trigger fixed (2026-10-07): _API_URL/_FRONTEND_URL set to real Cloud Run URLs, watches main, JWT secrets rotated",
+        "API ESM startup crash fixed and deployed; Cloud Run live at gigsge-web/gigsge-api (2026-10-07)",
+        "Smoke check passed 6/6 against live Cloud Run URLs (2026-10-07, scripts/smoke-check.ps1 added for Windows)"
       ],
       "remaining": [
-        "Fix Cloud Build _API_URL trigger substitution in GCP Console and redeploy to Cloud Run",
-        "Run scripts/smoke-check.sh against the live URL to gate UAT handoff",
-        "Stakeholder user guides (step-by-step for poster and worker roles)",
-        "FAQ for trust model and fee structure"
+        "Finish custom domain mapping: uat.gigs.ge + api.uat.gigs.ge (DNS + mappings done, awaiting Google certificate provisioning; then update trigger URLs and redeploy)",
+        "Stakeholder user guides (step-by-step for poster and worker roles) — postponed by user",
+        "FAQ for trust model and fee structure — postponed by user"
       ],
-      "notes": "Docker stack and smoke check are done. Decision 2026-10-07: deploy on Cloud Run (pipeline already exists); the GCE VM option is dropped."
+      "notes": "Decision 2026-10-07: deploy on Cloud Run (pipeline already exists); the GCE VM option is dropped. Domain gigs.ge bought at domenebi.ge, DNS hosted on Cloudflare."
     }
   ],
   "uiBugs": [
