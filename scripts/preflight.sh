@@ -12,7 +12,7 @@
 # What it does:
 #   1. Fetches all remotes.
 #   2. Refuses to continue if the working tree is dirty.
-#   3. Switches to the canonical integration branch (uat/first-slice).
+#   3. Switches to the canonical integration branch (main).
 #   4. Fast-forwards it to origin.
 #   5. Creates the named task branch off it, or switches into it if it already exists
 #      (rebasing onto the latest integration branch).
@@ -21,7 +21,7 @@
 
 set -euo pipefail
 
-INTEGRATION_BRANCH="uat/first-slice"
+INTEGRATION_BRANCH="main"
 ALLOWED_PREFIXES_REGEX='^(feat|fix|docs|chore|refactor)/.+'
 
 TASK_BRANCH="${1:-}"
