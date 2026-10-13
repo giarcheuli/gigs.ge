@@ -24,6 +24,10 @@ set -euo pipefail
 INTEGRATION_BRANCH="dev"
 ALLOWED_PREFIXES_REGEX='^(feat|fix|docs|chore|refactor)/.+'
 
+git_repo() {
+  git -c core.autocrlf=true "$@"
+}
+
 TASK_BRANCH="${1:-}"
 
 if [[ -z "$TASK_BRANCH" ]]; then
@@ -43,34 +47,34 @@ if [[ ! "$TASK_BRANCH" =~ $ALLOWED_PREFIXES_REGEX ]]; then
 fi
 
 echo "→ fetching remotes (with prune)"
-git fetch --all --prune
+git_repo fetch --all --prune
 
 echo "→ asserting clean working tree"
-if [[ -n "$(git status --porcelain)" ]]; then
+if [[ -n "$(git_repo status --porcelain)" ]]; then
   echo ""
   echo "error: working tree is not clean."
   echo "       commit, stash (with a label), or discard your changes before starting a new task."
   echo ""
-  git status --short
+  git_repo status --short
   exit 1
 fi
 
 echo "→ switching to $INTEGRATION_BRANCH"
-git switch "$INTEGRATION_BRANCH"
+git_repo switch "$INTEGRATION_BRANCH"
 
 echo "→ fast-forwarding $INTEGRATION_BRANCH from origin"
-git pull --ff-only origin "$INTEGRATION_BRANCH"
+git_repo pull --ff-only origin "$INTEGRATION_BRANCH"
 
-INTEGRATION_SHA="$(git rev-parse --short "$INTEGRATION_BRANCH")"
+INTEGRATION_SHA="$(git_repo rev-parse --short "$INTEGRATION_BRANCH")"
 
-if git show-ref --verify --quiet "refs/heads/$TASK_BRANCH"; then
+if git_repo show-ref --verify --quiet "refs/heads/$TASK_BRANCH"; then
   echo "→ task branch $TASK_BRANCH exists locally — switching to it"
-  git switch "$TASK_BRANCH"
+  git_repo switch "$TASK_BRANCH"
   echo "→ rebasing $TASK_BRANCH onto $INTEGRATION_BRANCH ($INTEGRATION_SHA)"
-  git rebase "$INTEGRATION_BRANCH"
+  git_repo rebase "$INTEGRATION_BRANCH"
 else
   echo "→ creating new task branch $TASK_BRANCH from $INTEGRATION_BRANCH ($INTEGRATION_SHA)"
-  git switch -c "$TASK_BRANCH"
+  git_repo switch -c "$TASK_BRANCH"
 fi
 
 echo ""
