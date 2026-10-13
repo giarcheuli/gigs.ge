@@ -32,7 +32,7 @@ sequenceDiagram
     API-->>U: 201 { user } + Set-Cookie (refresh)
 ```
 
-After registration, the user is **authenticated but unverified**. They can view the board (same as a visitor) but cannot post or apply until both email and phone are confirmed.
+After registration, the user is **authenticated with email unverified**. They can view the board (same as a visitor) but cannot post or apply until email is confirmed. Phone verification is optional for the first usable release; the phone field remains collected at registration but does not gate actions.
 
 ## Login
 
@@ -63,21 +63,21 @@ sequenceDiagram
 
 **Rotation** means every refresh call issues a *new* refresh token. If an attacker replays an old one, the server knows the family was compromised and can revoke all tokens for that user.
 
-## Verification (Email + Phone)
+## Verification (Email Required, Phone Optional)
 
-Users must verify **both** channels to reach `verified` status:
+Email verification is required for posting and applying. Phone verification is optional and is not part of the first-release access decision:
 
 | Channel | Method | Endpoint |
 |---------|--------|----------|
 | Email | 6-digit one-time code (OTC) | `POST /auth/verify/email` |
-| Phone | 6-digit OTP via SMS | `POST /auth/verify/phone` |
+| Phone | Optional 6-digit OTP if offered later | `POST /auth/verify/phone` |
 
-OTP codes are stored hashed in the `otp_codes` table with:
+Email OTCs are stored hashed in the `otp_codes` table with:
 - Max 5 attempts before expiry
-- 10-minute TTL
+- 15-minute TTL
 - 60-second cooldown on resend
 
-> **v1 note:** SMS is stubbed — the OTP is logged to console in development. Real SMS integration comes later.
+> **Launch dependency:** Production email delivery must work. SMS delivery is optional and is not a launch blocker.
 
 ## Auth Guards
 
@@ -86,7 +86,7 @@ Three Fastify `preHandler` hooks gate access throughout the API:
 | Guard | Checks | Used by |
 |-------|--------|---------|
 | `requireAuth` | Valid access token, user exists, not banned | Any logged-in action |
-| `requireVerified` | `requireAuth` + `email_verified` + `phone_verified` | Post gig, apply, contracts |
+| `requireVerified` (or renamed email guard) | `requireAuth` + `email_verified` | Post gig, apply, and other actions that require a verified account |
 | `requireAdmin` | `requireAuth` + `role = 'admin'` | All `/admin/*` routes |
 
 These are composable — a route can chain them:
