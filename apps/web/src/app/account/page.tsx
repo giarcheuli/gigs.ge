@@ -129,8 +129,8 @@ function ProfileTab({ logout }: { logout: () => Promise<void> }) {
       {/* Unverified email banner */}
       {!user.emailVerified && (
         <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
-          Your email is not verified.{' '}
-          <Link href="/verify" className="font-semibold hover:underline">
+          Email verification is required to post gigs and apply.{' '}
+          <Link href="/verify?next=%2Faccount" className="font-semibold hover:underline">
             Verify now →
           </Link>
         </div>
@@ -148,7 +148,7 @@ function ProfileTab({ logout }: { logout: () => Promise<void> }) {
 
         <Row label="Phone">
           <span>{user.phone}</span>
-          {user.phoneVerified ? <VerifiedBadge /> : <UnverifiedBadge />}
+          {user.phoneVerified ? <VerifiedBadge /> : <OptionalBadge />}
         </Row>
 
         <Row label="Member since">
@@ -175,7 +175,7 @@ function ProfileTab({ logout }: { logout: () => Promise<void> }) {
 
 function MyJobsTab() {
   const { user } = useAuth();
-  const isVerified = Boolean(user?.emailVerified && user?.phoneVerified);
+  const isVerified = Boolean(user?.emailVerified);
 
   const { data: gigs = [], isLoading } = useQuery<Gig[]>({
     queryKey: ['my-gigs'],
@@ -468,6 +468,14 @@ function UnverifiedBadge() {
   return (
     <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-700">
       Unverified
+    </span>
+  );
+}
+
+function OptionalBadge() {
+  return (
+    <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-600">
+      Not verified · optional
     </span>
   );
 }

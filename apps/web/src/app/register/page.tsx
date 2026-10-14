@@ -78,7 +78,7 @@ export default function RegisterPage() {
         user?: AuthUser;
         error?: string;
         field?: string;
-        _dev?: { emailCode?: string; smsCode?: string };
+        _dev?: { emailCode?: string };
       };
 
       if (!res.ok) {
@@ -162,6 +162,9 @@ export default function RegisterPage() {
                 className={`flex-1 rounded-l-none ${inputCls(!!errors.phone)}`}
               />
             </div>
+            <p className="mt-1 text-xs text-gray-500">
+              Phone verification is optional. You must verify your email to post gigs or apply for work.
+            </p>
           </Field>
 
           <Field label="Date of birth" error={errors.dateOfBirth?.message}>

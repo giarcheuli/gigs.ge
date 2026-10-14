@@ -3,7 +3,7 @@ import { and, eq, desc } from 'drizzle-orm';
 import { createGigSchema, updateGigSchema } from '@gigs/shared/schemas';
 import { db } from '../../db/index.js';
 import { gigs } from '../../db/schema/index.js';
-import { requireAuth, requireVerified } from '../../middleware/guards.js';
+import { requireAuth, requireEmailVerified } from '../../middleware/guards.js';
 import { verifyAccessToken } from '../../lib/auth.js';
 
 const DEFAULT_GIG_EXPIRY_DAYS = 30;
@@ -43,7 +43,7 @@ function validatePricing(pricing: GigPricingInput): string | null {
 }
 
 export async function gigsRoutes(app: FastifyInstance) {
-  app.post('/', { preHandler: [requireVerified] }, async (request, reply) => {
+  app.post('/', { preHandler: [requireEmailVerified] }, async (request, reply) => {
     const body = createGigSchema.parse(request.body);
     const pricingError = validatePricing(body);
 

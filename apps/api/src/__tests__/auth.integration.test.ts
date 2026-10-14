@@ -106,8 +106,9 @@ describe('Auth Routes Integration', () => {
       return callback(tx);
     });
 
+    const otpInsert = mockInsertResult();
     mockDb.insert
-      .mockReturnValueOnce(mockInsertResult())
+      .mockReturnValueOnce(otpInsert)
       .mockReturnValueOnce(mockInsertResult());
 
     const app = await buildApp();
@@ -142,6 +143,8 @@ describe('Auth Routes Integration', () => {
         }),
       }),
     );
+    expect(otpInsert.values).toHaveBeenCalledWith(expect.objectContaining({ channel: 'email' }));
+    expect(otpInsert.values).toHaveBeenCalledTimes(1);
   });
 
   it('rejects underage registration before touching the database', async () => {
@@ -431,6 +434,25 @@ describe('Auth Routes Integration — verify-otp', () => {
     expect(response.json()).toMatchObject({ error: expect.stringContaining('channel') });
   });
 
+  it('does not offer phone verification while SMS delivery is unavailable', async () => {
+    const app = await buildApp();
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/verify-otp?channel=sms',
+      headers: authHeaders(),
+      payload: { code: '123456' },
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toEqual({
+      error: 'Phone verification is optional and is not available yet',
+      code: 'PHONE_VERIFICATION_NOT_AVAILABLE',
+      statusCode: 409,
+    });
+    expect(mockDb.query.otpCodes.findFirst).not.toHaveBeenCalled();
+  });
+
   it('returns 400 when no valid OTP record exists', async () => {
     mockDb.query.otpCodes.findFirst.mockResolvedValueOnce(null);
 
@@ -445,7 +467,8 @@ describe('Auth Routes Integration — verify-otp', () => {
 
     expect(response.statusCode).toBe(400);
     expect(response.json()).toEqual({
-      error: 'No valid OTP found. Please request a new one.',
+      error: 'No valid email code found. Request a new code to continue.',
+      code: 'EMAIL_OTP_EXPIRED',
       statusCode: 400,
     });
   });
@@ -468,7 +491,8 @@ describe('Auth Routes Integration — verify-otp', () => {
 
     expect(response.statusCode).toBe(429);
     expect(response.json()).toEqual({
-      error: 'Too many attempts. Please request a new code.',
+      error: 'Too many attempts. Request a new code before trying again.',
+      code: 'OTP_ATTEMPTS_EXHAUSTED',
       statusCode: 429,
     });
     expect(mockDb.update).not.toHaveBeenCalled();
@@ -492,7 +516,11 @@ describe('Auth Routes Integration — verify-otp', () => {
     await app.close();
 
     expect(response.statusCode).toBe(400);
-    expect(response.json()).toEqual({ error: 'Invalid verification code', statusCode: 400 });
+    expect(response.json()).toEqual({
+      error: 'That code is incorrect. Check it and try again.',
+      code: 'INVALID_OTP',
+      statusCode: 400,
+    });
     expect(mockDb.update).toHaveBeenCalledTimes(1);
   });
 
@@ -520,6 +548,71 @@ describe('Auth Routes Integration — verify-otp', () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({ verified: true, channel: 'email' });
     expect(mockDb.update).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe('Auth Routes Integration — resend-otp', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockDb.insert.mockReset();
+    mockDb.query.otpCodes.findFirst.mockReset();
+  });
+
+  const authHeaders = () => ({ authorization: `Bearer ${makeAccessToken()}` });
+
+  it('does not create phone codes while phone verification is unavailable', async () => {
+    const app = await buildApp();
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/resend-otp?channel=sms',
+      headers: authHeaders(),
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({ code: 'PHONE_VERIFICATION_NOT_AVAILABLE' });
+    expect(mockDb.insert).not.toHaveBeenCalled();
+  });
+
+  it('enforces the 60-second email resend cooldown', async () => {
+    mockDb.query.otpCodes.findFirst.mockResolvedValueOnce({
+      createdAt: new Date(Date.now() - 30_000),
+    });
+
+    const app = await buildApp();
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/resend-otp?channel=email',
+      headers: authHeaders(),
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(429);
+    expect(response.json()).toMatchObject({ code: 'OTP_RESEND_COOLDOWN' });
+    expect(response.json().retryAfterSeconds).toBeGreaterThan(0);
+    expect(response.json().retryAfterSeconds).toBeLessThanOrEqual(30);
+    expect(mockDb.insert).not.toHaveBeenCalled();
+  });
+
+  it('creates an email code when no recent code exists', async () => {
+    mockDb.query.otpCodes.findFirst.mockResolvedValueOnce(null);
+    const insertResult = mockInsertResult();
+    mockDb.insert.mockReturnValueOnce(insertResult);
+
+    const app = await buildApp();
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/resend-otp?channel=email',
+      headers: authHeaders(),
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().message).toBe('Verification code sent via email');
+    expect(insertResult.values).toHaveBeenCalledWith(expect.objectContaining({
+      userId: TEST_USER_ID,
+      channel: 'email',
+    }));
   });
 });
 

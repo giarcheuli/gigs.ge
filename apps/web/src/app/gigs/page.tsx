@@ -61,7 +61,7 @@ function expiryLabel(expiresAt: string): string {
 
 export default function GigBoardPage() {
   const { user } = useAuth();
-  const isVerified = Boolean(user?.emailVerified && user?.phoneVerified);
+  const isVerified = Boolean(user?.emailVerified);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['gigs', 'active'],

@@ -147,7 +147,7 @@ describe('Applications + Contracts Routes Integration', () => {
     mockDb.transaction.mockReset();
   });
 
-  it('allows a verified worker to apply to an active gig', async () => {
+  it('allows an email-verified worker with an unverified phone to apply', async () => {
     mockDb.query.gigs.findFirst.mockResolvedValueOnce(activeGig);
     mockDb.query.applications.findFirst.mockResolvedValueOnce(null);
     mockDb.insert
@@ -158,7 +158,7 @@ describe('Applications + Contracts Routes Integration', () => {
     const response = await app.inject({
       method: 'POST',
       url: '/api/v1/applications',
-      headers: { authorization: `Bearer ${makeToken(WORKER_ID)}` },
+      headers: { authorization: `Bearer ${makeToken(WORKER_ID, { phoneVerified: false })}` },
       payload: { gigId: activeGig.id, message: pendingApplication.message },
     });
     await app.close();
@@ -187,7 +187,8 @@ describe('Applications + Contracts Routes Integration', () => {
 
     expect(response.statusCode).toBe(403);
     expect(response.json()).toEqual({
-      error: 'Email and phone verification required',
+      error: 'Email verification required',
+      code: 'EMAIL_VERIFICATION_REQUIRED',
       statusCode: 403,
     });
   });
