@@ -86,14 +86,14 @@ describe('Gigs Routes Integration', () => {
     mockDb.update.mockReset();
   });
 
-  it('allows a verified poster to create a draft gig', async () => {
+  it('allows an email-verified poster with an unverified phone to create a draft gig', async () => {
     mockDb.insert.mockReturnValueOnce(mockInsertReturning(draftGig));
 
     const app = await buildApp();
     const response = await app.inject({
       method: 'POST',
       url: '/api/v1/gigs',
-      headers: { authorization: `Bearer ${makeToken()}` },
+      headers: { authorization: `Bearer ${makeToken({ phoneVerified: false })}` },
       payload: {
         shortDescription: draftGig.shortDescription,
         longDescription: draftGig.longDescription,
@@ -136,7 +136,8 @@ describe('Gigs Routes Integration', () => {
 
     expect(response.statusCode).toBe(403);
     expect(response.json()).toEqual({
-      error: 'Email and phone verification required',
+      error: 'Email verification required',
+      code: 'EMAIL_VERIFICATION_REQUIRED',
       statusCode: 403,
     });
   });

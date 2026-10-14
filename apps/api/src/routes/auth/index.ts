@@ -22,6 +22,7 @@ import { requireAuth } from '../../middleware/guards.js';
 import { env } from '../../config/env.js';
 
 const OTP_EXPIRY_MS = 15 * 60 * 1000; // 15 minutes
+const OTP_RESEND_COOLDOWN_MS = 60 * 1000;
 const MAX_OTP_ATTEMPTS = 5;
 
 export async function authRoutes(app: FastifyInstance) {
@@ -65,17 +66,17 @@ export async function authRoutes(app: FastifyInstance) {
       return [user];
     });
 
-    // Generate OTPs for email and phone
+    // Email is the required verification channel; phone verification is optional.
     const emailCode = generateOtp();
-    const smsCode = generateOtp();
     const emailCodeHash = await hashOtp(emailCode);
-    const smsCodeHash = await hashOtp(smsCode);
     const expiresAt = new Date(Date.now() + OTP_EXPIRY_MS);
 
-    await db.insert(otpCodes).values([
-      { userId: newUser.id, channel: 'email', codeHash: emailCodeHash, expiresAt },
-      { userId: newUser.id, channel: 'sms', codeHash: smsCodeHash, expiresAt },
-    ]);
+    await db.insert(otpCodes).values({
+      userId: newUser.id,
+      channel: 'email',
+      codeHash: emailCodeHash,
+      expiresAt,
+    });
 
     // Issue tokens
     const payload: AccessTokenPayload = {
@@ -105,9 +106,8 @@ export async function authRoutes(app: FastifyInstance) {
       maxAge: 7 * 24 * 60 * 60, // 7 days in seconds
     });
 
-    // TODO: Send actual email/SMS in production
-    // v1 PoC: return OTP codes in dev mode
-    const devOtp = env.NODE_ENV === 'development' ? { emailCode, smsCode } : undefined;
+    // TODO: Send actual verification email in production.
+    const devOtp = env.NODE_ENV === 'development' ? { emailCode } : undefined;
 
     return reply.status(201).send({
       accessToken,
@@ -192,8 +192,15 @@ export async function authRoutes(app: FastifyInstance) {
     const body = verifyOtpSchema.parse(request.body);
     const channel = (request.query as { channel?: string }).channel;
 
-    if (channel !== 'email' && channel !== 'sms') {
-      return reply.status(400).send({ error: 'Query parameter "channel" must be "email" or "sms"', statusCode: 400 });
+    if (channel === 'sms') {
+      return reply.status(409).send({
+        error: 'Phone verification is optional and is not available yet',
+        code: 'PHONE_VERIFICATION_NOT_AVAILABLE',
+        statusCode: 409,
+      });
+    }
+    if (channel !== 'email') {
+      return reply.status(400).send({ error: 'Query parameter "channel" must be "email"', statusCode: 400 });
     }
 
     // Find the latest non-expired, unused OTP for this user+channel
@@ -208,18 +215,30 @@ export async function authRoutes(app: FastifyInstance) {
     });
 
     if (!otp) {
-      return reply.status(400).send({ error: 'No valid OTP found. Please request a new one.', statusCode: 400 });
+      return reply.status(400).send({
+        error: 'No valid email code found. Request a new code to continue.',
+        code: 'EMAIL_OTP_EXPIRED',
+        statusCode: 400,
+      });
     }
 
     if (otp.attempts >= MAX_OTP_ATTEMPTS) {
-      return reply.status(429).send({ error: 'Too many attempts. Please request a new code.', statusCode: 429 });
+      return reply.status(429).send({
+        error: 'Too many attempts. Request a new code before trying again.',
+        code: 'OTP_ATTEMPTS_EXHAUSTED',
+        statusCode: 429,
+      });
     }
 
     // Increment attempts
     await db.update(otpCodes).set({ attempts: otp.attempts + 1 }).where(eq(otpCodes.id, otp.id));
 
     if (!verifyOtpHash(body.code, otp.codeHash)) {
-      return reply.status(400).send({ error: 'Invalid verification code', statusCode: 400 });
+      return reply.status(400).send({
+        error: 'That code is incorrect. Check it and try again.',
+        code: 'INVALID_OTP',
+        statusCode: 400,
+      });
     }
 
     // Mark OTP as used
@@ -235,8 +254,36 @@ export async function authRoutes(app: FastifyInstance) {
   // ── POST /resend-otp ──
   app.post('/resend-otp', { preHandler: [requireAuth] }, async (request, reply) => {
     const channel = (request.query as { channel?: string }).channel;
-    if (channel !== 'email' && channel !== 'sms') {
-      return reply.status(400).send({ error: 'Query parameter "channel" must be "email" or "sms"', statusCode: 400 });
+    if (channel === 'sms') {
+      return reply.status(409).send({
+        error: 'Phone verification is optional and is not available yet',
+        code: 'PHONE_VERIFICATION_NOT_AVAILABLE',
+        statusCode: 409,
+      });
+    }
+    if (channel !== 'email') {
+      return reply.status(400).send({ error: 'Query parameter "channel" must be "email"', statusCode: 400 });
+    }
+
+    const recentCode = await db.query.otpCodes.findFirst({
+      where: and(
+        eq(otpCodes.userId, request.user.sub),
+        eq(otpCodes.channel, 'email'),
+        gt(otpCodes.createdAt, new Date(Date.now() - OTP_RESEND_COOLDOWN_MS)),
+      ),
+      orderBy: (otpCodes, { desc }) => [desc(otpCodes.createdAt)],
+    });
+
+    if (recentCode) {
+      const retryAfterSeconds = Math.max(1, Math.ceil(
+        (recentCode.createdAt.getTime() + OTP_RESEND_COOLDOWN_MS - Date.now()) / 1000,
+      ));
+      return reply.status(429).send({
+        error: `You can request another code in ${retryAfterSeconds} seconds.`,
+        code: 'OTP_RESEND_COOLDOWN',
+        retryAfterSeconds,
+        statusCode: 429,
+      });
     }
 
     const code = generateOtp();
@@ -250,11 +297,11 @@ export async function authRoutes(app: FastifyInstance) {
       expiresAt,
     });
 
-    // TODO: Send actual email/SMS in production
+    // TODO: Send actual verification email in production.
     const devOtp = env.NODE_ENV === 'development' ? { code } : undefined;
 
     return reply.send({
-      message: `Verification code sent via ${channel}`,
+      message: 'Verification code sent via email',
       ...(devOtp && { _dev: devOtp }),
     });
   });

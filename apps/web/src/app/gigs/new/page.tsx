@@ -97,7 +97,7 @@ export default function NewGigPage() {
   useEffect(() => {
     if (loading) return;
     if (!user) { router.replace('/login?next=/gigs/new'); return; }
-    if (!user.emailVerified || !user.phoneVerified) { router.replace('/verify'); }
+    if (!user.emailVerified) { router.replace('/verify?next=%2Fgigs%2Fnew'); }
   }, [user, loading, router]);
 
   const now = new Date();
