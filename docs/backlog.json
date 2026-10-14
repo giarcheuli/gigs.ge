@@ -3,7 +3,7 @@
     "updatedAt": "2026-10-14",
     "goal": "Complete the trust-critical marketplace flows and make business rules configurable before public soft launch.",
     "repoState": "development_active",
-    "summary": "Dev and UAT Cloud Run environments are live. Product decisions recorded 2026-10-14: email verification is mandatory for posting/applying; phone verification is optional (phone remains collected); mutual cancellation requires both parties' agreement at any time and has no fee; worker quit remains unilateral with the configured grace-period rule; poster disputes remain separate. Detailed UI/API/error/edge-case requirements are in docs/specs/feat-email-required-phone-optional.md and docs/specs/feat-mutual-contract-cancellation.md. The configurable-settings backend is being developed on feat/configurable-contract-settings but is not merged or deployed. Remaining high-risk gaps include server-side privacy enforcement, cancellation workflow, production email delivery, contract timers, evidence/arbitration, fee ledger/invoices, admin operations, and uploads. Guides/FAQ are postponed; fixed-price contracts are first-release scope and range/negotiable contracts are pinned for an early post-release follow-up."
+    "summary": "Dev and UAT Cloud Run environments are live. Email verification is now the only gate for posting/applying; phone verification is optional and the change is deployed to dev (PR #17). Production email delivery is still required before public sign-up. Mutual cancellation is specified as request/consent with no fee; worker quit and poster disputes remain separate. Full UX/error/edge-case requirements are linked from the backlog. Configurable settings backend work remains unmerged on feat/configurable-contract-settings. Other major gaps include server-side privacy enforcement, cancellation workflow, contract timers, evidence/arbitration, billing, admin operations, and uploads. Guides/FAQ are postponed; fixed-price only remains initial scope and range/negotiable contracts are pinned for early post-release."
   },
   "milestones": [
     {
@@ -151,9 +151,10 @@
     {
       "task": "Align registration, web prompts, shared guards, and API access checks so email verification is mandatory for posting/applying and phone verification is optional; cover all verification/error states.",
       "priority": "high",
-      "status": "not_started",
+      "status": "done",
       "phase": "m2_auth_rules",
-      "notes": "Approved product decision 2026-10-14. Requirements: docs/specs/feat-email-required-phone-optional.md. Phone number remains required at signup; do not require phone OTP."
+      "completedAt": "2026-10-14",
+      "notes": "Implemented and deployed to dev in PR #17. Email is required for posting/applying; phone remains collected but optional to verify. Includes email-only guard, email OTP only, clear optional-phone copy, server resend cooldown, stable error codes, and return-to-action verification flow. Requirements: docs/specs/feat-email-required-phone-optional.md."
     },
     {
       "task": "Implement production email delivery for verification OTP and password reset, including delivery failures and resend/expiry handling.",
