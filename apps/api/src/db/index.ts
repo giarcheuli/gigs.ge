@@ -10,7 +10,7 @@ import * as schema from './schema/index.js';
 const client = process.env.INSTANCE_CONNECTION_NAME
   ? postgres({
       host: `/cloudsql/${process.env.INSTANCE_CONNECTION_NAME}`,
-      user: 'postgres',
+      user: env.DB_USER,
       password: process.env.DB_PASSWORD,
       database: process.env.DB_NAME ?? 'gigsge',
       max: 10,

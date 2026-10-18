@@ -20,12 +20,40 @@ import {
 import type { AccessTokenPayload } from '../../lib/auth.js';
 import { requireAuth } from '../../middleware/guards.js';
 import { env } from '../../config/env.js';
+import { sendPasswordResetEmail, sendVerificationEmail } from '../../lib/auth-email.js';
+import {
+  authEmailTaskSchema,
+  enqueueAuthEmailTask,
+  decryptAuthEmailTaskEnvelope,
+} from '../../lib/auth-email-queue.js';
+import {
+  consumeAuthIpRateLimit,
+  consumeForgotPasswordRateLimit,
+} from '../../lib/forgot-password-rate-limit.js';
 
 const OTP_EXPIRY_MS = 15 * 60 * 1000; // 15 minutes
 const OTP_RESEND_COOLDOWN_MS = 60 * 1000;
 const MAX_OTP_ATTEMPTS = 5;
+const EMAIL_VERIFICATION_PURPOSE = 'email_verification';
+const PASSWORD_RESET_PURPOSE = 'password_reset';
 
 export async function authRoutes(app: FastifyInstance) {
+  app.addHook('preHandler', async (request, reply) => {
+    if (request.url.split('?')[0].endsWith('/internal/email-delivery')) return;
+
+    const rateLimit = await consumeAuthIpRateLimit(request.ip);
+    if (!rateLimit.allowed) {
+      return reply.status(429)
+        .header('Retry-After', String(rateLimit.retryAfterSeconds))
+        .send({
+          error: 'Too many authentication requests. Try again later.',
+          code: 'AUTH_RATE_LIMIT',
+          retryAfterSeconds: rateLimit.retryAfterSeconds,
+          statusCode: 429,
+        });
+    }
+  });
+
   // ── POST /register ──
   app.post('/register', async (request, reply) => {
     const body = registerSchema.parse(request.body);
@@ -74,9 +102,20 @@ export async function authRoutes(app: FastifyInstance) {
     await db.insert(otpCodes).values({
       userId: newUser.id,
       channel: 'email',
+      purpose: EMAIL_VERIFICATION_PURPOSE,
       codeHash: emailCodeHash,
       expiresAt,
     });
+
+    const emailResult = await enqueueAuthEmailTask({
+      type: 'verification',
+      userId: newUser.id,
+      credential: emailCode,
+      expiresAt: expiresAt.toISOString(),
+    });
+    if (!emailResult.queued) {
+      request.log.error({ event: 'auth_email_enqueue_failed', type: 'verification', reason: emailResult.reason });
+    }
 
     // Issue tokens
     const payload: AccessTokenPayload = {
@@ -119,6 +158,12 @@ export async function authRoutes(app: FastifyInstance) {
         emailVerified: newUser.emailVerified,
         phoneVerified: newUser.phoneVerified,
       },
+      emailDeliveryStatus: emailResult.queued
+        ? 'queued'
+        : env.NODE_ENV === 'development' ? 'development_code' : 'failed',
+      ...(!emailResult.queued && env.NODE_ENV !== 'development' && {
+        retryAfterSeconds: OTP_RESEND_COOLDOWN_MS / 1000,
+      }),
       ...(devOtp && { _dev: devOtp }),
     });
   });
@@ -208,6 +253,7 @@ export async function authRoutes(app: FastifyInstance) {
       where: and(
         eq(otpCodes.userId, request.user.sub),
         eq(otpCodes.channel, channel),
+        eq(otpCodes.purpose, EMAIL_VERIFICATION_PURPOSE),
         isNull(otpCodes.usedAt),
         gt(otpCodes.expiresAt, new Date()),
       ),
@@ -269,6 +315,7 @@ export async function authRoutes(app: FastifyInstance) {
       where: and(
         eq(otpCodes.userId, request.user.sub),
         eq(otpCodes.channel, 'email'),
+        eq(otpCodes.purpose, EMAIL_VERIFICATION_PURPOSE),
         gt(otpCodes.createdAt, new Date(Date.now() - OTP_RESEND_COOLDOWN_MS)),
       ),
       orderBy: (otpCodes, { desc }) => [desc(otpCodes.createdAt)],
@@ -286,6 +333,21 @@ export async function authRoutes(app: FastifyInstance) {
       });
     }
 
+    const user = await db.query.users.findFirst({
+      where: eq(users.id, request.user.sub),
+      columns: { email: true, emailVerified: true },
+    });
+    if (!user) {
+      return reply.status(401).send({ error: 'Account unavailable', statusCode: 401 });
+    }
+    if (user.emailVerified) {
+      return reply.status(409).send({
+        error: 'Email is already verified',
+        code: 'EMAIL_ALREADY_VERIFIED',
+        statusCode: 409,
+      });
+    }
+
     const code = generateOtp();
     const codeHash = await hashOtp(code);
     const expiresAt = new Date(Date.now() + OTP_EXPIRY_MS);
@@ -293,15 +355,35 @@ export async function authRoutes(app: FastifyInstance) {
     await db.insert(otpCodes).values({
       userId: request.user.sub,
       channel,
+      purpose: EMAIL_VERIFICATION_PURPOSE,
       codeHash,
       expiresAt,
     });
 
-    // TODO: Send actual verification email in production.
+    const emailResult = await enqueueAuthEmailTask({
+      type: 'verification',
+      userId: request.user.sub,
+      credential: code,
+      expiresAt: expiresAt.toISOString(),
+    });
     const devOtp = env.NODE_ENV === 'development' ? { code } : undefined;
 
+    if (!emailResult.queued && env.NODE_ENV !== 'development') {
+      request.log.error({ event: 'auth_email_enqueue_failed', type: 'verification', reason: emailResult.reason });
+      return reply.status(503).send({
+        error: 'Verification email is temporarily unavailable. Please try again later.',
+        code: 'EMAIL_DELIVERY_UNAVAILABLE',
+        retryAfterSeconds: OTP_RESEND_COOLDOWN_MS / 1000,
+        statusCode: 503,
+      });
+    }
+    if (emailResult.queued) {
+      request.log.info({ event: 'auth_email_queued', type: 'verification', deliveryId: emailResult.deliveryId });
+    }
+
     return reply.send({
-      message: 'Verification code sent via email',
+      message: emailResult.queued ? 'Verification email queued for delivery' : 'Verification code available in development',
+      emailDeliveryStatus: emailResult.queued ? 'queued' : 'development_code',
       ...(devOtp && { _dev: devOtp }),
     });
   });
@@ -400,6 +482,20 @@ export async function authRoutes(app: FastifyInstance) {
 
   // ── POST /forgot-password ──
   app.post('/forgot-password', async (request, reply) => {
+    const rateLimit = await consumeForgotPasswordRateLimit(request.ip);
+    if (!rateLimit.allowed) {
+      return reply.status(429)
+        .header('Retry-After', String(rateLimit.retryAfterSeconds))
+        .send({
+          error: 'Too many password reset requests. Try again later.',
+          code: 'FORGOT_PASSWORD_RATE_LIMIT',
+          retryAfterSeconds: rateLimit.retryAfterSeconds,
+          statusCode: 429,
+        });
+    }
+
+      const responseStartedAt = Date.now();
+      const responseFloorMs = 350 + crypto.randomInt(0, 150);
     const body = forgotPasswordSchema.parse(request.body);
 
     const user = await db.query.users.findFirst({
@@ -407,29 +503,106 @@ export async function authRoutes(app: FastifyInstance) {
     });
 
     // Always return success to prevent email enumeration
+    let devToken: { resetToken: string } | undefined;
     if (!user) {
-      return reply.send({ message: 'If that email exists, a reset link has been sent.' });
+      const enqueueResult = await enqueueAuthEmailTask({ type: 'noop' });
+      if (enqueueResult.queued) {
+        request.log.info({ event: 'auth_email_queued', type: 'password_reset', deliveryId: enqueueResult.deliveryId });
+      } else {
+        request.log.error({ event: 'auth_email_enqueue_failed', type: 'password_reset', reason: enqueueResult.reason });
+      }
+    } else {
+      const resetToken = crypto.randomBytes(32).toString('hex');
+      const tokenHash = await hashOtp(resetToken);
+      const expiresAt = new Date(Date.now() + OTP_EXPIRY_MS);
+
+      await db.insert(otpCodes).values({
+        userId: user.id,
+        channel: 'email',
+        purpose: PASSWORD_RESET_PURPOSE,
+        codeHash: tokenHash,
+        expiresAt,
+      });
+
+      const enqueueResult = await enqueueAuthEmailTask({
+        type: 'password_reset',
+        userId: user.id,
+        credential: resetToken,
+        expiresAt: expiresAt.toISOString(),
+      });
+      if (!enqueueResult.queued) {
+        request.log.error({ event: 'auth_email_enqueue_failed', type: 'password_reset', reason: enqueueResult.reason });
+      } else {
+        request.log.info({ event: 'auth_email_queued', type: 'password_reset', deliveryId: enqueueResult.deliveryId });
+      }
+      if (env.NODE_ENV === 'development') devToken = { resetToken };
     }
 
-    // Generate a reset token (stored as OTP with 'email' channel, special prefix)
-    const resetToken = crypto.randomBytes(32).toString('hex');
-    const tokenHash = await hashOtp(resetToken);
-    const expiresAt = new Date(Date.now() + OTP_EXPIRY_MS);
-
-    await db.insert(otpCodes).values({
-      userId: user.id,
-      channel: 'email',
-      codeHash: tokenHash,
-      expiresAt,
-    });
-
-    // TODO: Send actual reset email with link containing resetToken
-    const devToken = env.NODE_ENV === 'development' ? { resetToken } : undefined;
+    const remainingDelayMs = responseStartedAt + responseFloorMs - Date.now();
+    if (remainingDelayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, remainingDelayMs));
+    }
 
     return reply.send({
       message: 'If that email exists, a reset link has been sent.',
       ...(devToken && { _dev: devToken }),
     });
+  });
+
+  // Cloud Tasks retries this signed endpoint; credentials are validated against
+  // their current database record before Resend is called.
+  app.post('/internal/email-delivery', async (request, reply) => {
+    const signature = request.headers['x-gigs-auth-email-signature'];
+    const decodedTask = typeof signature === 'string'
+      ? decryptAuthEmailTaskEnvelope(request.body, signature, env.JWT_ACCESS_SECRET)
+      : null;
+    if (!decodedTask) {
+      return reply.status(401).send({ error: 'Invalid task signature', statusCode: 401 });
+    }
+
+    const { task, deliveryId } = decodedTask;
+    if (task.type === 'noop' || new Date(task.expiresAt).getTime() <= Date.now()) {
+      return reply.status(204).send();
+    }
+
+    const purpose = task.type === 'verification' ? EMAIL_VERIFICATION_PURPOSE : PASSWORD_RESET_PURPOSE;
+    const otp = await db.query.otpCodes.findFirst({
+      where: and(
+        eq(otpCodes.userId, task.userId),
+        eq(otpCodes.channel, 'email'),
+        eq(otpCodes.purpose, purpose),
+        eq(otpCodes.codeHash, await hashOtp(task.credential)),
+        isNull(otpCodes.usedAt),
+        gt(otpCodes.expiresAt, new Date()),
+      ),
+    });
+    if (!otp) return reply.status(204).send();
+
+    const user = await db.query.users.findFirst({
+      where: eq(users.id, task.userId),
+      columns: { email: true },
+    });
+    if (!user) return reply.status(204).send();
+
+    const result = task.type === 'verification'
+      ? await sendVerificationEmail(user.email, task.credential, deliveryId)
+      : await sendPasswordResetEmail(
+          user.email,
+          (() => {
+            const resetUrl = new URL('/reset-password', env.FRONTEND_URL);
+            resetUrl.hash = new URLSearchParams({ token: task.credential }).toString();
+            return resetUrl.toString();
+          })(),
+          deliveryId,
+        );
+
+    if (!result.accepted) {
+      request.log.error({ event: 'auth_email_delivery_failed', type: task.type, reason: result.reason });
+      return reply.status(503).send({ error: 'Email delivery temporarily unavailable', statusCode: 503 });
+    }
+
+    request.log.info({ event: 'auth_email_accepted', type: task.type, messageId: result.messageId });
+    return reply.status(204).send();
   });
 
   // ── POST /reset-password ──
@@ -443,6 +616,7 @@ export async function authRoutes(app: FastifyInstance) {
       where: and(
         eq(otpCodes.codeHash, tokenHash),
         eq(otpCodes.channel, 'email'),
+        eq(otpCodes.purpose, PASSWORD_RESET_PURPOSE),
         isNull(otpCodes.usedAt),
         gt(otpCodes.expiresAt, new Date()),
       ),
@@ -455,18 +629,32 @@ export async function authRoutes(app: FastifyInstance) {
 
     const passwordHash = await hashPassword(body.password);
 
-    await db.transaction(async (tx) => {
-      // Mark token as used
-      await tx.update(otpCodes).set({ usedAt: new Date() }).where(eq(otpCodes.id, otp.id));
+    const claimedUser = await db.transaction(async (tx) => {
+      const [claimed] = await tx.update(otpCodes)
+        .set({ usedAt: new Date() })
+        .where(and(
+          eq(otpCodes.id, otp.id),
+          eq(otpCodes.purpose, PASSWORD_RESET_PURPOSE),
+          isNull(otpCodes.usedAt),
+          gt(otpCodes.expiresAt, new Date()),
+        ))
+        .returning({ userId: otpCodes.userId });
+
+      if (!claimed) return null;
 
       // Update password
-      await tx.update(users).set({ passwordHash, updatedAt: new Date() }).where(eq(users.id, otp.userId));
+      await tx.update(users).set({ passwordHash, updatedAt: new Date() }).where(eq(users.id, claimed.userId));
 
       // Revoke all refresh tokens for this user
       await tx.update(refreshTokens)
         .set({ revokedAt: new Date() })
-        .where(and(eq(refreshTokens.userId, otp.userId), isNull(refreshTokens.revokedAt)));
+        .where(and(eq(refreshTokens.userId, claimed.userId), isNull(refreshTokens.revokedAt)));
+      return claimed;
     });
+
+    if (!claimedUser) {
+      return reply.status(400).send({ error: 'Invalid or expired reset token', statusCode: 400 });
+    }
 
     return reply.send({ message: 'Password reset successful. Please log in.' });
   });

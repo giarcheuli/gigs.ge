@@ -31,9 +31,14 @@ export default function VerifyPage() {
   const [nextPath, setNextPath] = useState('/gigs');
 
   useEffect(() => {
-    const candidate = new URLSearchParams(window.location.search).get('next');
+    const params = new URLSearchParams(window.location.search);
+    const candidate = params.get('next');
     if (candidate?.startsWith('/') && !candidate.startsWith('//') && !candidate.includes('\\')) {
       setNextPath(candidate);
+    }
+    if (params.get('delivery') === 'failed') {
+      setResendMsg("We couldn't send the verification email. You can request another code after 60 seconds.");
+      setResendCooldownSeconds(60);
     }
   }, []);
 

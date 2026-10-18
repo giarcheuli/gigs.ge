@@ -28,6 +28,7 @@
     "@fastify/multipart": "^8.1.0",
     "@fastify/rate-limit": "^9.1.0",
     "@gigs/shared": "workspace:*",
+    "@google-cloud/tasks": "^7.3.0",
     "bcryptjs": "^2.4.3",
     "bullmq": "^5.7.8",
     "dotenv": "^16.4.5",
@@ -38,6 +39,7 @@
     "pino": "^9.0.0",
     "pino-pretty": "^11.0.0",
     "postgres": "^3.4.4",
+    "resend": "^6.34.1",
     "zod": "^3.22.4"
   },
   "devDependencies": {

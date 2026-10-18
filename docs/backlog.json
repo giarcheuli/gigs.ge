@@ -225,8 +225,9 @@
     {
       "task": "Integrate a production email provider for email verification and password reset (currently delivery is stubbed). Phone SMS is optional and not required for release.",
       "priority": "high",
-      "status": "not_started",
-      "phase": "m4_hardening"
+      "status": "in_progress",
+      "phase": "m4_hardening",
+      "notes": "Implementation is on feat/resend-email-delivery: Resend auth delivery through encrypted, signed Cloud Tasks jobs; atomic single-use reset tokens; shared Postgres HMAC-IP limiting with timing padding; and minimal reset screens. Before dev rollout, provision gigsge_dev_app/gigsge_uat_app as isolated DB owners, separate DB/JWT/Resend Secret Manager secrets, the auth-email-dev queue, per-environment runtime service accounts with scoped roles, and explicit trigger substitutions. Cloud Build fails closed when any environment value is missing."
     },
     {
       "task": "Add end-to-end tests for user flows (e.g., gig poster creating a gig, worker applying, contract completion).",

@@ -3,6 +3,7 @@ import {
   uuid,
   text,
   integer,
+  index,
   timestamp,
   unique,
 } from 'drizzle-orm/pg-core';
@@ -13,12 +14,21 @@ export const otpCodes = pgTable('otp_codes', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   channel: text('channel').notNull(), // 'email' | 'sms'
+  purpose: text('purpose').notNull().default('email_verification'),
   codeHash: text('code_hash').notNull(),
   attempts: integer('attempts').notNull().default(0),
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
   usedAt: timestamp('used_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const authRateLimitBuckets = pgTable('auth_rate_limit_buckets', {
+  bucketKey: text('bucket_key').primaryKey(),
+  count: integer('count').notNull().default(0),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+}, (table) => ({
+  expiresAtIdx: index('auth_rate_limit_buckets_expires_at_idx').on(table.expiresAt),
+}));
 
 export const infoRequests = pgTable('info_requests', {
   id: uuid('id').primaryKey().defaultRandom(),
