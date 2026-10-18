@@ -30,6 +30,10 @@ jest.mock('../lib/auth-email-queue.js', () => {
   };
 });
 
+jest.mock('../lib/forgot-password-rate-limit.js', () => ({
+  consumeForgotPasswordRateLimit: jest.fn().mockResolvedValue({ allowed: true }),
+}));
+
 import crypto from 'node:crypto';
 import { buildApp } from '../app.js';
 import { db } from '../db/index.js';
@@ -39,6 +43,7 @@ import {
   enqueueAuthEmailTask,
   signAuthEmailTaskEnvelope,
 } from '../lib/auth-email-queue.js';
+import { consumeForgotPasswordRateLimit } from '../lib/forgot-password-rate-limit.js';
 import { hashPassword, signAccessToken, signRefreshToken, hashToken } from '../lib/auth.js';
 
 type MockUser = {
@@ -743,6 +748,30 @@ describe('Auth Routes Integration — forgot-password', () => {
     expect(enqueueAuthEmailTask).toHaveBeenCalledWith({ type: 'noop' });
   });
 
+  it('keeps known and unknown reset requests on the same minimum response-time floor', async () => {
+    mockDb.query.users.findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce(makeUser());
+    mockDb.insert.mockReturnValueOnce(mockInsertResult());
+
+    const app = await buildApp();
+    const request = async (email: string) => {
+      const startedAt = Date.now();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/forgot-password',
+        payload: { email },
+      });
+      return { response, durationMs: Date.now() - startedAt };
+    };
+    const unknown = await request('nobody@example.com');
+    const known = await request('worker@example.com');
+    await app.close();
+
+    expect(unknown.response.json()).toEqual(known.response.json());
+    expect(unknown.durationMs).toBeGreaterThanOrEqual(350);
+    expect(known.durationMs).toBeGreaterThanOrEqual(350);
+    expect(Math.abs(unknown.durationMs - known.durationMs)).toBeLessThan(250);
+  });
+
   it('stores a reset token when the email is registered', async () => {
     mockDb.query.users.findFirst.mockResolvedValueOnce(makeUser());
     const insertResult = mockInsertResult();
@@ -791,21 +820,22 @@ describe('Auth Routes Integration — forgot-password', () => {
 
   it('rate-limits forgot-password requests by IP', async () => {
     mockDb.query.users.findFirst.mockResolvedValue(null);
+    jest.mocked(consumeForgotPasswordRateLimit).mockResolvedValueOnce({
+      allowed: false,
+      retryAfterSeconds: 900,
+    });
 
     const app = await buildApp();
-    const responses = [];
-    for (let attempt = 0; attempt < 6; attempt += 1) {
-      responses.push(await app.inject({
-        method: 'POST',
-        url: '/api/v1/auth/forgot-password',
-        payload: { email: 'nobody@example.com' },
-      }));
-    }
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/forgot-password',
+      payload: { email: 'nobody@example.com' },
+    });
     await app.close();
 
-    expect(responses.slice(0, 5).every((response) => response.statusCode === 200)).toBe(true);
-    expect(responses[5].statusCode).toBe(429);
-    expect(enqueueAuthEmailTask).toHaveBeenCalledTimes(5);
+    expect(response.statusCode).toBe(429);
+    expect(response.json()).toMatchObject({ code: 'FORGOT_PASSWORD_RATE_LIMIT', retryAfterSeconds: 900 });
+    expect(enqueueAuthEmailTask).not.toHaveBeenCalled();
   });
 });
 

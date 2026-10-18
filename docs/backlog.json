@@ -227,7 +227,7 @@
       "priority": "high",
       "status": "in_progress",
       "phase": "m4_hardening",
-      "notes": "Implementation is on feat/resend-email-delivery: Resend verification/resend/reset delivery through encrypted, signed Cloud Tasks jobs; forgot-password rate limit; minimal reset screens; and Secret Manager binding. Dev rollout also requires the auth-email-dev queue, Cloud Tasks API, a dedicated API runtime service account with scoped Cloud SQL/secret/queue roles, Cloud Build act-as permission, and the resend-api-key-dev secret."
+      "notes": "Implementation is on feat/resend-email-delivery: Resend verification/resend/reset delivery through encrypted, signed Cloud Tasks jobs; a shared Postgres HMAC-IP reset limit with timing padding; minimal reset screens; and Secret Manager binding. Dev rollout requires the auth-email-dev queue, Cloud Tasks API, a dedicated dev API runtime service account with scoped Cloud SQL/secret/queue roles, Cloud Build act-as permission, and the resend-api-key-dev secret. UAT substitutions default empty and require separate queue, secret, and API identity."
     },
     {
       "task": "Add end-to-end tests for user flows (e.g., gig poster creating a gig, worker applying, contract completion).",

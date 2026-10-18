@@ -13,6 +13,7 @@ import { notificationsRoutes } from './routes/notifications/index.js';
 
 export async function buildApp() {
   const app = Fastify({
+    trustProxy: 1,
     logger: {
       level: env.LOG_LEVEL,
       ...(env.NODE_ENV === 'development' && {

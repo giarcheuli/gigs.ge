@@ -48,7 +48,7 @@ The API stores hashed verification codes and reset tokens, but its registration,
 ### Password reset
 
 - Preserve the generic forgot-password response for both known and unknown email addresses; neither the response nor delivery status may reveal whether an account exists.
-- Apply a route-specific IP rate limit to forgot-password requests. Enqueue a no-op task for unknown accounts so both paths make a queue request and return the same response shape.
+- Apply a shared Postgres-backed limit of five forgot-password requests per IP per 15-minute window. Store only an HMAC of the IP and window, not the raw IP. Enqueue a no-op task for unknown accounts and apply a randomized minimum response duration so both paths make a queue request and have comparable timing.
 - For an existing account, email a single-use reset link containing the existing cryptographically random token. The token expires after 15 minutes, is stored only as a hash, and is consumed once.
 - Use `FRONTEND_URL/reset-password#token=<token>` so the token stays in the browser fragment instead of being sent in HTTP requests or referrer headers.
 - Add a minimal `/forgot-password` page linked from login. It accepts an email address, submits to the existing forgot-password endpoint, and always displays the same generic confirmation.
@@ -62,7 +62,7 @@ The API stores hashed verification codes and reset tokens, but its registration,
 - The internal task endpoint validates an HMAC signature made with the API access-token secret using constant-time comparison, then decrypts and validates the envelope. Invalid signatures are rejected without sending mail.
 - Before delivery, the worker confirms the credential still matches an unused, unexpired record of the expected purpose. Stale or already-used tasks complete without sending.
 - Use the Cloud Tasks delivery ID as Resend's idempotency key so retries do not send duplicates.
-- Cloud Run uses the dedicated `gigsge-api-runtime@$PROJECT_ID.iam.gserviceaccount.com` identity. Grant it Cloud SQL Client on the project, Secret Manager Secret Accessor on only the Resend secret, and Cloud Tasks Enqueuer on only the environment queue. Grant the Cloud Build service account Service Account User on this runtime identity so it can deploy the API.
+- Cloud Run uses a dedicated runtime identity per environment (for example, `gigsge-api-dev-runtime` and `gigsge-api-uat-runtime`). Grant each identity Cloud SQL Client on the project, Secret Manager Secret Accessor on only that environment's Resend secret, and Cloud Tasks Enqueuer on only that environment's queue. Grant the Cloud Build service account Service Account User on each runtime identity so it can deploy that environment's API.
 - The Cloud Tasks queue must be provisioned in the same region as the API.
 
 ## Delivery, failure, and security requirements
@@ -82,17 +82,17 @@ The API stores hashed verification codes and reset tokens, but its registration,
 4. Forgot-password responses are indistinguishable for existing and unknown accounts. The request page always shows the same confirmation; existing accounts receive a reset email with a single-use, 15-minute link; the reset page completes the existing reset operation.
 5. Verification and password-reset tokens cannot be used interchangeably. Both remain hashed at rest and single-use.
 6. Provider failure does not delete a newly registered account, expose a token, or falsely tell the user that an email was accepted. Registration UI presents a safe resend path; password-reset response remains generic.
-7. Unit/integration tests cover encrypted enqueue and delivery, queue/provider failure, signed-task authorization, tamper rejection, Resend idempotency, route rate limiting, production secrecy, resend cooldown, unknown-account response, token-purpose separation, token expiry/use, and the reset page flow.
+7. Unit/integration tests cover encrypted enqueue and delivery, queue/provider failure, signed-task authorization, tamper rejection, Resend idempotency, shared IP rate limiting and reset response timing, production secrecy, resend cooldown, unknown-account response, token-purpose separation, token expiry/use, and the reset page flow.
 8. A manual dev check sends to a controlled mailbox, verifies the email code, requests a reset, follows the link, and signs in with the new password. No secret is committed.
 9. `docs/architecture/auth-flow.md` and relevant UAT runbook notes accurately describe email-only verification and real Resend delivery; SMS remains optional and unavailable.
 
 ## Rollout
 
-1. Create the dedicated API runtime service account and grant only its Cloud SQL, secret-access, and environment-queue roles. Let the Cloud Build service account act as this identity for deployment.
+1. Create separate dev and UAT API runtime service accounts and grant each only its Cloud SQL, environment secret, and environment queue roles. Let the Cloud Build service account act as each identity for deployment.
 2. Enable the Cloud Tasks API, create an environment-specific queue in `us-central1`, and grant the API runtime service account `roles/cloudtasks.enqueuer` on that queue.
 3. Use a Resend sending-only key restricted to `gigs.ge` where supported. Store it as a Secret Manager secret and bind it to the dev API service; keep `EMAIL_FROM` as a non-secret setting.
 4. Deploy to dev and verify registration, resend cooldown, and password reset using a controlled mailbox.
-5. Promote to UAT only after the same checks pass with a separate queue and secret. Do not revoke the existing Resend onboarding key until the replacement is confirmed working.
+5. Promote to UAT only after the same checks pass with `_RESEND_API_SECRET=resend-api-key-uat`, `_AUTH_EMAIL_QUEUE=auth-email-uat`, and the UAT runtime service account configured in the UAT trigger. The Cloud Build substitutions default to empty, so each environment must explicitly set its own values. Do not revoke the existing Resend onboarding key until the replacement is confirmed working.
 
 ## Related documents
 

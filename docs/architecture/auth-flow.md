@@ -84,6 +84,8 @@ Verification and password-reset jobs are queued in Google Cloud Tasks and sent f
 
 `POST /auth/forgot-password` always returns the same generic response to avoid revealing whether an email is registered. The route is limited to five requests per IP every 15 minutes. It queues a no-op task for unknown accounts and a reset-email task for existing accounts. The worker sends a single-use reset link that expires after 15 minutes. The token is placed in the URL fragment, stored only as a hash, and accepted only by the password-reset flow. The `/forgot-password` and `/reset-password` screens complete the user journey.
 
+The reset limit uses an atomic Postgres fixed-window counter shared across Cloud Run instances. It stores an HMAC of the IP and window, not the raw IP, and deletes expired buckets opportunistically. Cloud Run's single trusted proxy hop is used to resolve the caller IP. Both known and unknown account paths enqueue a task and wait for a randomized minimum response duration to reduce timing differences.
+
 ## Delivery Behavior
 
 Registration creates the account and hashed verification code, then queues the email without waiting for Resend. If Cloud Tasks cannot accept the job, registration remains successful and reports a safe delivery-failed state so the user can retry after the 60-second cooldown. Resend returns a stable temporary-unavailable response if enqueueing fails. Password-reset requests retain their generic response even when enqueueing fails; Cloud Tasks retries temporary provider failures until the credential expires.

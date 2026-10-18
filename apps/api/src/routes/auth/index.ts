@@ -26,6 +26,7 @@ import {
   enqueueAuthEmailTask,
   decryptAuthEmailTaskEnvelope,
 } from '../../lib/auth-email-queue.js';
+import { consumeForgotPasswordRateLimit } from '../../lib/forgot-password-rate-limit.js';
 
 const OTP_EXPIRY_MS = 15 * 60 * 1000; // 15 minutes
 const OTP_RESEND_COOLDOWN_MS = 60 * 1000;
@@ -461,9 +462,21 @@ export async function authRoutes(app: FastifyInstance) {
   });
 
   // ── POST /forgot-password ──
-  app.post('/forgot-password', {
-    config: { rateLimit: { max: 5, timeWindow: '15 minutes' } },
-  }, async (request, reply) => {
+  app.post('/forgot-password', async (request, reply) => {
+    const rateLimit = await consumeForgotPasswordRateLimit(request.ip);
+    if (!rateLimit.allowed) {
+      return reply.status(429)
+        .header('Retry-After', String(rateLimit.retryAfterSeconds))
+        .send({
+          error: 'Too many password reset requests. Try again later.',
+          code: 'FORGOT_PASSWORD_RATE_LIMIT',
+          retryAfterSeconds: rateLimit.retryAfterSeconds,
+          statusCode: 429,
+        });
+    }
+
+      const responseStartedAt = Date.now();
+      const responseFloorMs = 350 + crypto.randomInt(0, 150);
     const body = forgotPasswordSchema.parse(request.body);
 
     const user = await db.query.users.findFirst({
@@ -504,6 +517,11 @@ export async function authRoutes(app: FastifyInstance) {
         request.log.info({ event: 'auth_email_queued', type: 'password_reset', deliveryId: enqueueResult.deliveryId });
       }
       if (env.NODE_ENV === 'development') devToken = { resetToken };
+    }
+
+    const remainingDelayMs = responseStartedAt + responseFloorMs - Date.now();
+    if (remainingDelayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, remainingDelayMs));
     }
 
     return reply.send({

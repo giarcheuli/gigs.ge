@@ -10,6 +10,7 @@
 #   _FRONTEND_URL         Public URL of the web app (e.g. https://uat.gigs.ge)
 #   _RESEND_API_SECRET    Secret Manager secret name for this environment's Resend key
 #   _AUTH_EMAIL_QUEUE     Cloud Tasks queue name for this environment
+#   _API_RUNTIME_SERVICE_ACCOUNT  Environment-specific Cloud Run API identity
 #   _API_SERVICE          Cloud Run service name for the API (gigsge-api | gigsge-api-dev)
 #   _WEB_SERVICE          Cloud Run service name for the web app (gigsge-web | gigsge-web-dev)
 #   _DB_NAME              Postgres database name (gigsge | gigsge_dev)
@@ -74,7 +75,7 @@ steps:
       - '--add-cloudsql-instances=gigsge:us-central1:gigsge-uat-db'
       - '--allow-unauthenticated'
       - '--timeout=300s'
-      - '--service-account=gigsge-api-runtime@$PROJECT_ID.iam.gserviceaccount.com'
+      - '--service-account=${_API_RUNTIME_SERVICE_ACCOUNT}'
       - '--container=api'
       - '--image=gcr.io/$PROJECT_ID/${_API_SERVICE}'
       - '--port=3001'
@@ -106,8 +107,9 @@ substitutions:
   _JWT_REFRESH_SECRET: ''    # REQUIRED — 32+ char random string
   _API_URL: ''               # REQUIRED — public URL of the API
   _FRONTEND_URL: ''          # REQUIRED — public URL of the web app
-  _RESEND_API_SECRET: 'resend-api-key-dev' # Secret Manager secret name; override per environment
-  _AUTH_EMAIL_QUEUE: 'auth-email-dev' # Cloud Tasks queue; override per environment
+  _RESEND_API_SECRET: ''     # REQUIRED — Secret Manager secret name for this environment
+  _AUTH_EMAIL_QUEUE: ''      # REQUIRED — Cloud Tasks queue for this environment
+  _API_RUNTIME_SERVICE_ACCOUNT: '' # REQUIRED — dedicated API identity for this environment
   _API_SERVICE: 'gigsge-api' # Cloud Run service name for the API
   _WEB_SERVICE: 'gigsge-web' # Cloud Run service name for the web app
   _DB_NAME: 'gigsge'         # Postgres database name
