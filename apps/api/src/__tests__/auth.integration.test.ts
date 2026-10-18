@@ -345,6 +345,25 @@ describe('Auth Routes Integration', () => {
     expect(response.json()).toMatchObject({ code: 'AUTH_RATE_LIMIT', retryAfterSeconds: 60 });
     expect(mockDb.query.users.findFirst).not.toHaveBeenCalled();
   });
+
+  it('does not let a query-string path skip the auth IP limit', async () => {
+    jest.mocked(consumeAuthIpRateLimit).mockResolvedValueOnce({
+      allowed: false,
+      retryAfterSeconds: 60,
+    });
+
+    const app = await buildApp();
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/login?next=/internal/email-delivery',
+      payload: { email: 'worker@example.com', password: 'WrongPassword123' },
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(429);
+    expect(consumeAuthIpRateLimit).toHaveBeenCalled();
+    expect(mockDb.query.users.findFirst).not.toHaveBeenCalled();
+  });
 });
 
 // ── Helper used across the remaining suites ──────────────────────────────────

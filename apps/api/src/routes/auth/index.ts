@@ -39,7 +39,7 @@ const PASSWORD_RESET_PURPOSE = 'password_reset';
 
 export async function authRoutes(app: FastifyInstance) {
   app.addHook('preHandler', async (request, reply) => {
-    if (request.url.includes('/internal/email-delivery')) return;
+    if (request.url.split('?')[0].endsWith('/internal/email-delivery')) return;
 
     const rateLimit = await consumeAuthIpRateLimit(request.ip);
     if (!rateLimit.allowed) {
