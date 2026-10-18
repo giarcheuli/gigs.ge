@@ -227,7 +227,7 @@
       "priority": "high",
       "status": "in_progress",
       "phase": "m4_hardening",
-      "notes": "Implementation is on feat/resend-email-delivery: Resend verification/resend/reset delivery through encrypted, signed Cloud Tasks jobs; a shared Postgres HMAC-IP reset limit with timing padding; minimal reset screens; and Secret Manager binding. Dev rollout requires the auth-email-dev queue, Cloud Tasks API, a dedicated dev API runtime service account with scoped Cloud SQL/secret/queue roles, Cloud Build act-as permission, and the resend-api-key-dev secret. UAT substitutions default empty and require separate queue, secret, and API identity."
+      "notes": "Implementation is on feat/resend-email-delivery: Resend auth delivery through encrypted, signed Cloud Tasks jobs; atomic single-use reset tokens; shared Postgres HMAC-IP limiting with timing padding; and minimal reset screens. Before dev rollout, provision gigsge_dev_app/gigsge_uat_app as isolated DB owners, separate DB/JWT/Resend Secret Manager secrets, the auth-email-dev queue, per-environment runtime service accounts with scoped roles, and explicit trigger substitutions. Cloud Build fails closed when any environment value is missing."
     },
     {
       "task": "Add end-to-end tests for user flows (e.g., gig poster creating a gig, worker applying, contract completion).",

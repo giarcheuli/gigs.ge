@@ -14,9 +14,10 @@ const required = (key: string): string => {
 const buildDatabaseUrl = (): string => {
   const instanceConnectionName = process.env.INSTANCE_CONNECTION_NAME;
   if (instanceConnectionName) {
+    const user = process.env.DB_USER ?? 'postgres';
     const password = required('DB_PASSWORD');
     const dbName = process.env.DB_NAME ?? 'gigsge';
-    return `postgresql://postgres:${encodeURIComponent(password)}@/${dbName}?host=/cloudsql/${instanceConnectionName}`;
+    return `postgresql://${encodeURIComponent(user)}:${encodeURIComponent(password)}@/${dbName}?host=/cloudsql/${instanceConnectionName}`;
   }
   return required('DATABASE_URL');
 };
@@ -28,6 +29,7 @@ export const env = {
   LOG_LEVEL: process.env.LOG_LEVEL ?? 'info',
 
   DATABASE_URL: buildDatabaseUrl(),
+  DB_USER: process.env.DB_USER ?? 'postgres',
   REDIS_URL: process.env.REDIS_URL ?? 'redis://localhost:6379',
   GCP_PROJECT_ID: process.env.GCP_PROJECT_ID ?? process.env.GOOGLE_CLOUD_PROJECT ?? process.env.GCLOUD_PROJECT ?? '',
   AUTH_EMAIL_TASK_LOCATION: process.env.AUTH_EMAIL_TASK_LOCATION ?? 'us-central1',

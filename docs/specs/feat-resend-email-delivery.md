@@ -62,7 +62,8 @@ The API stores hashed verification codes and reset tokens, but its registration,
 - The internal task endpoint validates an HMAC signature made with the API access-token secret using constant-time comparison, then decrypts and validates the envelope. Invalid signatures are rejected without sending mail.
 - Before delivery, the worker confirms the credential still matches an unused, unexpired record of the expected purpose. Stale or already-used tasks complete without sending.
 - Use the Cloud Tasks delivery ID as Resend's idempotency key so retries do not send duplicates.
-- Cloud Run uses a dedicated runtime identity per environment (for example, `gigsge-api-dev-runtime` and `gigsge-api-uat-runtime`). Grant each identity Cloud SQL Client on the project, Secret Manager Secret Accessor on only that environment's Resend secret, and Cloud Tasks Enqueuer on only that environment's queue. Grant the Cloud Build service account Service Account User on each runtime identity so it can deploy that environment's API.
+- Cloud Run uses a dedicated runtime identity per environment (for example, `gigsge-api-dev-runtime` and `gigsge-api-uat-runtime`). Grant each identity Cloud SQL Client on the project, Secret Manager Secret Accessor on only that environment's DB-password, JWT, and Resend secrets, and Cloud Tasks Enqueuer on only that environment's queue. Grant the Cloud Build service account Service Account User on each runtime identity so it can deploy that environment's API.
+- Dev and UAT may share a Cloud SQL instance, but must use different database users that own only `gigsge_dev` and `gigsge`, respectively. Revoke public connection privileges on those databases and grant CONNECT only to the matching environment user.
 - The Cloud Tasks queue must be provisioned in the same region as the API.
 
 ## Delivery, failure, and security requirements
@@ -88,11 +89,12 @@ The API stores hashed verification codes and reset tokens, but its registration,
 
 ## Rollout
 
-1. Create separate dev and UAT API runtime service accounts and grant each only its Cloud SQL, environment secret, and environment queue roles. Let the Cloud Build service account act as each identity for deployment.
-2. Enable the Cloud Tasks API, create an environment-specific queue in `us-central1`, and grant the API runtime service account `roles/cloudtasks.enqueuer` on that queue.
-3. Use a Resend sending-only key restricted to `gigs.ge` where supported. Store it as a Secret Manager secret and bind it to the dev API service; keep `EMAIL_FROM` as a non-secret setting.
-4. Deploy to dev and verify registration, resend cooldown, and password reset using a controlled mailbox.
-5. Promote to UAT only after the same checks pass with `_RESEND_API_SECRET=resend-api-key-uat`, `_AUTH_EMAIL_QUEUE=auth-email-uat`, and the UAT runtime service account configured in the UAT trigger. The Cloud Build substitutions default to empty, so each environment must explicitly set its own values. Do not revoke the existing Resend onboarding key until the replacement is confirmed working.
+1. Create separate dev/UAT database users, make each the owner of only its environment database, and revoke public CONNECT access on both databases.
+2. Create separate dev and UAT API runtime service accounts. Grant each only its Cloud SQL, environment secret, and environment queue roles; let the Cloud Build service account act as each identity for deployment.
+3. Enable the Cloud Tasks API, create an environment-specific queue in `us-central1`, and grant the API runtime service account `roles/cloudtasks.enqueuer` on that queue.
+4. Store each environment's DB password, JWT access secret, JWT refresh secret, and Resend key in separate Secret Manager secrets. Keep `EMAIL_FROM` as a non-secret setting.
+5. Deploy to dev and verify registration, resend cooldown, and password reset using a controlled mailbox.
+6. Promote to UAT only after the same checks pass with `gigsge-uat-app`, `_RESEND_API_SECRET=resend-api-key-uat`, `_AUTH_EMAIL_QUEUE=auth-email-uat`, and the UAT runtime service account configured in the UAT trigger. All environment substitutions default to empty, so each trigger must set its own values. Do not revoke the existing Resend onboarding key until the replacement is confirmed working.
 
 ## Related documents
 
