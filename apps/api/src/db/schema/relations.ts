@@ -5,7 +5,7 @@ import { refreshTokens } from './auth';
 import { regions, cities } from './regions';
 import { gigs, gigImages } from './gigs';
 import { applications, applicationAttachments } from './applications';
-import { contracts, contractAppendices, disputeEvidence, disputeEvidenceFiles } from './contracts';
+import { contracts, contractCancellationRequests, contractAppendices, disputeEvidence, disputeEvidenceFiles } from './contracts';
 import { billingLedger, invoices } from './billing';
 import { reviews } from './reviews';
 import { notifications, messages } from './messages';
@@ -88,9 +88,16 @@ export const contractsRelations = relations(contracts, ({ one, many }) => ({
   poster: one(users, { fields: [contracts.posterId], references: [users.id], relationName: 'posterContracts' }),
   worker: one(users, { fields: [contracts.workerId], references: [users.id], relationName: 'workerContracts' }),
   appendices: many(contractAppendices),
+  cancellationRequests: many(contractCancellationRequests),
   evidence: many(disputeEvidence),
   billingEntries: many(billingLedger),
   reviews: many(reviews),
+}));
+
+export const contractCancellationRequestsRelations = relations(contractCancellationRequests, ({ one }) => ({
+  contract: one(contracts, { fields: [contractCancellationRequests.contractId], references: [contracts.id] }),
+  requester: one(users, { fields: [contractCancellationRequests.requesterId], references: [users.id] }),
+  recipient: one(users, { fields: [contractCancellationRequests.recipientId], references: [users.id] }),
 }));
 
 // ── Contract Appendices ──

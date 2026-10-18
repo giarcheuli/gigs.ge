@@ -45,6 +45,8 @@ interface Notification {
   payload: {
     applicationId?: string;
     gigId?: string;
+    contractId?: string;
+    requestId?: string;
     gigName?: string;
     applicantId?: string;
     [key: string]: any;
@@ -372,6 +374,25 @@ function NotificationsTab() {
   });
 
   function renderNotification(notif: Notification) {
+    const cancellationMessages: Record<string, string> = {
+      cancellation_requested: 'A cancellation request needs your response.',
+      cancellation_accepted: 'Both parties agreed to cancel the contract. No fee is due.',
+      cancellation_declined: 'The cancellation request was declined. The contract remains active.',
+      cancellation_withdrawn: 'A cancellation request was withdrawn. The contract remains active.',
+      cancellation_superseded: 'The contract changed; the cancellation request is closed.',
+    };
+    if (cancellationMessages[notif.type] && notif.payload.contractId) {
+      return (
+        <Link
+          href={`/contracts/${notif.payload.contractId}`}
+          className="block bg-white rounded-xl p-4 border border-gray-100 hover:border-brand-200 transition-all space-y-2"
+        >
+          <p className="text-sm font-semibold text-gray-900">{cancellationMessages[notif.type]}</p>
+          <p className="text-xs text-gray-400">{fmtDate(notif.createdAt)}</p>
+        </Link>
+      );
+    }
+
     if (notif.type === 'application_submitted') {
       const { gigName, gigId } = notif.payload;
       return (
