@@ -3,7 +3,7 @@
     "updatedAt": "2026-10-14",
     "goal": "Complete the trust-critical marketplace flows and make business rules configurable before public soft launch.",
     "repoState": "development_active",
-    "summary": "Dev and UAT Cloud Run environments are live. Email verification is now the only gate for posting/applying; phone verification is optional and the change is deployed to dev (PR #17). Production email delivery is still required before public sign-up. Mutual cancellation is specified as request/consent with no fee; worker quit and poster disputes remain separate. Full UX/error/edge-case requirements are linked from the backlog. Configurable settings backend work remains unmerged on feat/configurable-contract-settings. Other major gaps include server-side privacy enforcement, cancellation workflow, contract timers, evidence/arbitration, billing, admin operations, and uploads. Guides/FAQ are postponed; fixed-price only remains initial scope and range/negotiable contracts are pinned for early post-release."
+    "summary": "Dev and UAT Cloud Run environments are live. Email verification is the only gate for posting/applying; phone verification is optional, and the change is deployed to dev (PR #17). Mutual cancellation now requires both parties' agreement, with worker quit and poster disputes kept separate; this is deployed to dev (PR #19). Production email delivery is still required before public sign-up. Remaining gaps include server-side privacy enforcement, contract timers, evidence/arbitration, billing, admin operations, and uploads. Configurable settings backend work remains unmerged on feat/configurable-contract-settings. Guides/FAQ are postponed; fixed-price only remains initial scope and range/negotiable contracts are pinned for early post-release."
   },
   "milestones": [
     {
@@ -166,9 +166,10 @@
     {
       "task": "Replace unilateral contract cancellation with a mutual request/accept/decline/withdraw workflow, including audit history, notifications, UI states, concurrency handling, and lifecycle regression tests.",
       "priority": "high",
-      "status": "not_started",
+      "status": "done",
       "phase": "m2_deal_lifecycle",
-      "notes": "Approved product decision 2026-10-14: both parties must agree at any time; no mutual-cancellation fee. Worker quit stays unilateral; poster uses dispute for incomplete work. Requirements: docs/specs/feat-mutual-contract-cancellation.md."
+      "completedAt": "2026-10-18",
+      "notes": "Implemented and deployed to dev in PR #19. Requests remain pending until accepted, declined, withdrawn, or superseded; mutual cancellation carries no fee. Worker quit and poster dispute remain separate. Requirements: docs/specs/feat-mutual-contract-cancellation.md."
     },
     {
       "task": "Implement BullMQ background workers for contract timers: 48h auto-complete, 14-day overdue auto-complete, 7-day dispute auto-resolve — all reading timeframes from platform_settings.",
