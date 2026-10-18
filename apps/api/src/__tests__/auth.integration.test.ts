@@ -837,6 +837,21 @@ describe('Auth Routes Integration — forgot-password', () => {
     expect(response.json()).toMatchObject({ code: 'FORGOT_PASSWORD_RATE_LIMIT', retryAfterSeconds: 900 });
     expect(enqueueAuthEmailTask).not.toHaveBeenCalled();
   });
+
+  it('uses the caller IP after Cloud Run proxy hops instead of a forged forwarded value', async () => {
+    mockDb.query.users.findFirst.mockResolvedValueOnce(null);
+    const app = await buildApp();
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/forgot-password',
+      headers: { 'x-forwarded-for': '198.51.100.99, 203.0.113.44, 35.191.1.1' },
+      payload: { email: 'nobody@example.com' },
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(200);
+    expect(consumeForgotPasswordRateLimit).toHaveBeenCalledWith('203.0.113.44');
+  });
 });
 
 describe('Auth Routes Integration — internal email task', () => {

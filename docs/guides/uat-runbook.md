@@ -106,6 +106,17 @@ Set trigger substitutions independently. Dev uses `_DB_INSTANCE=gigsge-uat-db`, 
 
 Remove the old `_DB_PASSWORD`, `_JWT_ACCESS_SECRET`, and `_JWT_REFRESH_SECRET` substitutions after the new Secret Manager versions are configured. Their values are no longer used and should not remain in the trigger.
 
+### Required Cloud Build service and database values
+
+Set these values explicitly in each trigger; Cloud Build now rejects missing values.
+
+| Trigger | API service | Web service | Database | Database user | SQL instance |
+|---------|-------------|-------------|----------|---------------|--------------|
+| Dev | `gigsge-api-dev` | `gigsge-web-dev` | `gigsge_dev` | `gigsge_dev_app` | `gigsge-uat-db` |
+| UAT | `gigsge-api` | `gigsge-web` | `gigsge` | `gigsge_uat_app` | `gigsge-uat-db` |
+
+Also set `_API_RUNTIME_SERVICE_ACCOUNT`, `_DB_PASSWORD_SECRET`, `_JWT_ACCESS_SECRET_NAME`, `_JWT_REFRESH_SECRET_NAME`, `_RESEND_API_SECRET`, `_AUTH_EMAIL_QUEUE`, `_API_URL`, and `_FRONTEND_URL` to the matching environment values. Dev and UAT use separate DB users and credentials even though they share the SQL instance.
+
 Create the database, run migrations, and seed UAT accounts:
 
 ```bash

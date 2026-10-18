@@ -26,22 +26,10 @@ steps:
     args:
       - '-c'
       - |
-        if [[ -z "${_DB_PASSWORD_SECRET}" || -z "${_DB_USER}" || -z "${_DB_INSTANCE}" || -z "${_DB_NAME}" || -z "${_RESEND_API_SECRET}" || -z "${_AUTH_EMAIL_QUEUE}" || -z "${_API_RUNTIME_SERVICE_ACCOUNT}" || -z "${_API_URL}" || -z "${_FRONTEND_URL}" || -z "${_JWT_ACCESS_SECRET_NAME}" || -z "${_JWT_REFRESH_SECRET_NAME}" ]]; then
-          echo "Required environment-specific database, email, JWT, URL, or runtime identity substitutions are missing." >&2
+        if [[ -z "${_DB_PASSWORD_SECRET}" || -z "${_DB_USER}" || -z "${_DB_INSTANCE}" || -z "${_DB_NAME}" || -z "${_RESEND_API_SECRET}" || -z "${_AUTH_EMAIL_QUEUE}" || -z "${_API_RUNTIME_SERVICE_ACCOUNT}" || -z "${_API_URL}" || -z "${_FRONTEND_URL}" || -z "${_JWT_ACCESS_SECRET_NAME}" || -z "${_JWT_REFRESH_SECRET_NAME}" || -z "${_API_SERVICE}" || -z "${_WEB_SERVICE}" ]]; then
+          echo "Required environment-specific database, service, secret, queue, URL, or runtime identity substitutions are missing." >&2
           exit 1
         fi
-
-  # ── 0. Ensure Cloud SQL database exists ───────────────────────────────────
-  # Runs before any build step. Succeeds whether or not the DB already exists.
-  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-    entrypoint: bash
-    args:
-      - '-c'
-      - |
-        gcloud sql databases create ${_DB_NAME} \
-          --instance=${_DB_INSTANCE} \
-          --project=$PROJECT_ID \
-          || echo "Database already exists, continuing..."
 
   # ── 1. Build the API Image (TypeScript Fastify) ────────────────────────────
   - name: 'gcr.io/cloud-builders/docker'
@@ -126,8 +114,8 @@ substitutions:
   _AUTH_EMAIL_QUEUE: ''      # REQUIRED — Cloud Tasks queue for this environment
   _API_RUNTIME_SERVICE_ACCOUNT: '' # REQUIRED — dedicated API identity for this environment
   _DB_NAME: ''               # REQUIRED — database name for this environment
-  _API_SERVICE: 'gigsge-api' # Cloud Run service name for the API
-  _WEB_SERVICE: 'gigsge-web' # Cloud Run service name for the web app
+  _API_SERVICE: ''           # REQUIRED — environment-specific API service name
+  _WEB_SERVICE: ''           # REQUIRED — environment-specific web service name
 
 options:
   logging: CLOUD_LOGGING_ONLY
