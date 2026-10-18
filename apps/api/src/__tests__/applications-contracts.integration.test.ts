@@ -10,6 +10,10 @@ jest.mock('../db/index.js', () => ({
       },
       contracts: {
         findFirst: jest.fn(),
+        findMany: jest.fn(),
+      },
+      infoRequests: {
+        findMany: jest.fn(),
       },
       users: {
         findFirst: jest.fn(),
@@ -33,7 +37,8 @@ const mockDb = db as unknown as {
   query: {
     gigs: { findFirst: jest.Mock };
     applications: { findFirst: jest.Mock; findMany: jest.Mock };
-    contracts: { findFirst: jest.Mock };
+    contracts: { findFirst: jest.Mock; findMany: jest.Mock };
+    infoRequests: { findMany: jest.Mock };
     users: { findFirst: jest.Mock };
   };
   insert: jest.Mock;
@@ -157,6 +162,8 @@ describe('Applications + Contracts Routes Integration', () => {
     mockDb.query.applications.findFirst.mockReset();
     mockDb.query.applications.findMany.mockReset();
     mockDb.query.contracts.findFirst.mockReset();
+    mockDb.query.contracts.findMany.mockReset().mockResolvedValue([]);
+    mockDb.query.infoRequests.findMany.mockReset().mockResolvedValue([]);
     mockDb.query.users.findFirst.mockReset();
     mockDb.insert.mockReset();
     mockDb.update.mockReset();
@@ -207,6 +214,42 @@ describe('Applications + Contracts Routes Integration', () => {
       code: 'EMAIL_VERIFICATION_REQUIRED',
       statusCode: 403,
     });
+  });
+
+  it('redacts hidden gig fields from the worker application history response', async () => {
+    const applicationGig = {
+      ...activeGig,
+      longDescription: 'Private job details',
+      cityId: 2,
+      streetAddress: 'Private work address',
+      availableFrom: activeGig.availableFrom,
+      availableTo: activeGig.availableTo,
+      visPrice: 'public',
+      visCity: 'verified',
+      visAddress: 'on_request',
+      visDates: 'verified',
+    };
+    mockDb.query.applications.findMany.mockResolvedValueOnce([{
+      ...pendingApplication,
+      gig: applicationGig,
+      contract: null,
+    }]);
+
+    const app = await buildApp();
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/v1/applications/mine',
+      headers: { authorization: `Bearer ${makeToken(WORKER_ID, { emailVerified: false, phoneVerified: true })}` },
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().data[0].gig).toMatchObject({
+      longDescription: null,
+      cityId: null,
+      streetAddress: null,
+    });
+    expect(JSON.stringify(response.json())).not.toContain(applicationGig.streetAddress);
   });
 
   it('lets the poster list applications for their gig and accept one into a draft contract', async () => {
@@ -387,6 +430,70 @@ describe('Applications + Contracts Routes Integration', () => {
         updatedAt: bothSignedContract.updatedAt.toISOString(),
       }),
     });
+  });
+
+  it('redacts post-contract fields after the contract reaches a terminal state', async () => {
+    const gigWithContractVisibility = {
+      ...activeGig,
+      longDescription: 'Details shared only during active work',
+      cityId: 2,
+      streetAddress: 'Private work address',
+      availableFrom: new Date('2026-05-01T10:00:00.000Z'),
+      availableTo: new Date('2026-05-10T10:00:00.000Z'),
+      visCity: 'post_contract',
+      visAddress: 'post_contract',
+      visDates: 'post_contract',
+      visPrice: 'private',
+    };
+    const activeHydrated = {
+      ...inProgressContract,
+      gig: gigWithContractVisibility,
+      application: { id: pendingApplication.id, message: pendingApplication.message },
+      cancellationRequests: [],
+    };
+    const terminalHydrated = {
+      ...activeHydrated,
+      status: 'completed',
+      completedAt: new Date('2026-05-11T12:00:00.000Z'),
+    };
+
+    mockDb.query.contracts.findFirst
+      .mockResolvedValueOnce(activeHydrated)
+      .mockResolvedValueOnce(terminalHydrated);
+    mockDb.query.contracts.findMany
+      .mockResolvedValueOnce([{ gigId: activeGig.id }])
+      .mockResolvedValueOnce([]);
+
+    const app = await buildApp();
+    const activeResponse = await app.inject({
+      method: 'GET',
+      url: `/api/v1/contracts/${inProgressContract.id}`,
+      headers: { authorization: `Bearer ${makeToken(WORKER_ID, { emailVerified: false })}` },
+    });
+    const terminalResponse = await app.inject({
+      method: 'GET',
+      url: `/api/v1/contracts/${inProgressContract.id}`,
+      headers: { authorization: `Bearer ${makeToken(WORKER_ID, { emailVerified: false })}` },
+    });
+    await app.close();
+
+    expect(activeResponse.statusCode).toBe(200);
+    expect(activeResponse.json().contract.gig).toMatchObject({
+      longDescription: gigWithContractVisibility.longDescription,
+      cityId: gigWithContractVisibility.cityId,
+      streetAddress: gigWithContractVisibility.streetAddress,
+      availableFrom: gigWithContractVisibility.availableFrom.toISOString(),
+      priceFixed: null,
+    });
+    expect(terminalResponse.statusCode).toBe(200);
+    expect(terminalResponse.json().contract.gig).toMatchObject({
+      longDescription: null,
+      cityId: null,
+      streetAddress: null,
+      availableFrom: null,
+      priceFixed: null,
+    });
+    expect(JSON.stringify(terminalResponse.json())).not.toContain(gigWithContractVisibility.streetAddress);
   });
 
   it('blocks non-parties from viewing contracts', async () => {

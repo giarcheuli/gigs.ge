@@ -5,6 +5,7 @@ import { createApplicationSchema } from '@gigs/shared/schemas';
 import { db } from '../../db/index.js';
 import { applications, contracts, gigs, notifications } from '../../db/schema/index.js';
 import { requireAuth, requireEmailVerified } from '../../middleware/guards.js';
+import { loadGigVisibilityContext, presentGig } from '../../lib/gig-visibility.js';
 
 const gigIdParamsSchema = z.object({ id: z.string().uuid() });
 const applicationIdParamsSchema = z.object({ id: z.string().uuid() });
@@ -164,7 +165,16 @@ export async function applicationsRoutes(app: FastifyInstance) {
       },
     });
 
-    return reply.send({ data });
+    const visibility = await loadGigVisibilityContext(
+      request.user,
+      data.map((application) => application.gig.id),
+    );
+    return reply.send({
+      data: data.map((application) => ({
+        ...application,
+        gig: presentGig(application.gig, visibility),
+      })),
+    });
   });
 
   /**

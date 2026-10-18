@@ -5,6 +5,7 @@ import { db } from '../../db/index.js';
 import { applications, contractCancellationRequests, contracts, notifications } from '../../db/schema/index.js';
 import { users } from '../../db/schema/users.js';
 import { requireAuth } from '../../middleware/guards.js';
+import { loadGigVisibilityContext, presentGig } from '../../lib/gig-visibility.js';
 
 const contractIdParamsSchema = z.object({ id: z.string().uuid() });
 const cancellationRequestParamsSchema = z.object({ id: z.string().uuid(), requestId: z.string().uuid() });
@@ -84,6 +85,7 @@ export async function contractsRoutes(app: FastifyInstance) {
       return reply.status(403).send({ error: 'You can only view your own contracts', statusCode: 403 });
     }
 
+    const visibility = await loadGigVisibilityContext(request.user, [contract.gigId]);
     const { cancellationRequests: requestHistory = [], ...contractData } = contract;
     const requests = requestHistory ?? [];
     const pendingRequest = requests.find((item) => item.status === 'pending');
@@ -107,7 +109,10 @@ export async function contractsRoutes(app: FastifyInstance) {
       }
     }
 
-    return reply.send({ contract: contractData, cancellationRequest });
+    return reply.send({
+      contract: { ...contractData, gig: presentGig(contract.gig, visibility) },
+      cancellationRequest,
+    });
   });
 
   // ── POST /:id/sign ─────────────────────────────────────────────────────────
