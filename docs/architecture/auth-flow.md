@@ -78,15 +78,15 @@ Email verification codes and password-reset tokens are stored hashed in `otp_cod
 - 15-minute TTL
 - 60-second cooldown on resend
 
-Verification and password-reset emails are sent from `noreply@gigs.ge` through Resend. The API key is supplied to Cloud Run from Google Secret Manager; it is never stored in source control or exposed to the browser. Local development can omit the key and use the explicitly development-only `_dev` code response. Provider failure never exposes a code or token in production.
+Verification and password-reset jobs are queued in Google Cloud Tasks and sent from `noreply@gigs.ge` through Resend. The queue stores an encrypted payload; the internal handler checks its HMAC signature, decrypts it, and confirms the hashed credential is still current before sending. Resend receives the task delivery ID as an idempotency key so task retries do not duplicate mail. The API key is supplied to Cloud Run from Google Secret Manager; it is never stored in source control or exposed to the browser. Local development can omit the queue/key and use the explicitly development-only `_dev` code response. Provider failure never exposes a code or token in production.
 
 ## Password Reset
 
-`POST /auth/forgot-password` always returns the same generic response to avoid revealing whether an email is registered. For an existing account, the API emails a single-use reset link that expires after 15 minutes. The token is placed in the URL fragment, stored only as a hash, and accepted only by the password-reset flow. The `/forgot-password` and `/reset-password` screens complete the user journey.
+`POST /auth/forgot-password` always returns the same generic response to avoid revealing whether an email is registered. The route is limited to five requests per IP every 15 minutes. It queues a no-op task for unknown accounts and a reset-email task for existing accounts. The worker sends a single-use reset link that expires after 15 minutes. The token is placed in the URL fragment, stored only as a hash, and accepted only by the password-reset flow. The `/forgot-password` and `/reset-password` screens complete the user journey.
 
 ## Delivery Behavior
 
-Registration creates the account and hashed verification code before attempting email delivery. If Resend cannot accept the email, registration remains successful and reports a safe delivery-failed state so the user can retry after the 60-second cooldown. The resend endpoint returns a stable temporary-unavailable response with retry timing. Password-reset requests retain their generic response even when delivery fails.
+Registration creates the account and hashed verification code, then queues the email without waiting for Resend. If Cloud Tasks cannot accept the job, registration remains successful and reports a safe delivery-failed state so the user can retry after the 60-second cooldown. Resend returns a stable temporary-unavailable response if enqueueing fails. Password-reset requests retain their generic response even when enqueueing fails; Cloud Tasks retries temporary provider failures until the credential expires.
 
 ## Auth Guards
 
@@ -112,6 +112,7 @@ app.post('/gigs', {
 |-------|-------|-----|
 | Auth endpoints (`/auth/*`) | 10 req/min per IP | Brute-force protection |
 | OTP resend | 1 req/60s per user | Prevent verification-email abuse |
+| Password reset | 5 req/15min per IP | Limit reset abuse and email flooding |
 | General API | 100 req/min per user | Fair use |
 
 ## Security Decisions

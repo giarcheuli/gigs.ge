@@ -14,7 +14,7 @@ describe('auth email sender', () => {
       subject: 'Verify your gigs.ge email',
       text: expect.stringContaining('123456'),
       html: expect.stringContaining('<strong>123456</strong>'),
-    }));
+    }), undefined);
   });
 
   it('sends reset links as escaped HTML and plain text', async () => {
@@ -28,7 +28,19 @@ describe('auth email sender', () => {
       subject: 'Reset your gigs.ge password',
       text: expect.stringContaining(resetUrl),
       html: expect.stringContaining(`href="${resetUrl}"`),
-    }));
+    }), undefined);
+  });
+
+  it('forwards a stable idempotency key for queue retries', async () => {
+    const send = jest.fn().mockResolvedValue({ data: { id: 'email-3' }, error: null });
+    const sender = createAuthEmailSender({ emails: { send } } as AuthEmailClient, 'noreply@gigs.ge');
+
+    await sender.sendVerificationEmail('worker@example.com', '123456', 'delivery-3');
+
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({ to: 'worker@example.com' }),
+      { idempotencyKey: 'delivery-3' },
+    );
   });
 
   it('returns a safe failure when the provider reports an error or is not configured', async () => {

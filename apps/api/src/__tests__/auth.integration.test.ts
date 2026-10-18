@@ -22,10 +22,23 @@ jest.mock('../lib/auth-email.js', () => ({
   sendPasswordResetEmail: jest.fn().mockResolvedValue({ accepted: true, messageId: 'reset-1' }),
 }));
 
+jest.mock('../lib/auth-email-queue.js', () => {
+  const actual = jest.requireActual('../lib/auth-email-queue.js');
+  return {
+    ...actual,
+    enqueueAuthEmailTask: jest.fn().mockResolvedValue({ queued: true, deliveryId: 'delivery-1' }),
+  };
+});
+
 import crypto from 'node:crypto';
 import { buildApp } from '../app.js';
 import { db } from '../db/index.js';
 import { sendPasswordResetEmail, sendVerificationEmail } from '../lib/auth-email.js';
+import {
+  createAuthEmailTaskEnvelope,
+  enqueueAuthEmailTask,
+  signAuthEmailTaskEnvelope,
+} from '../lib/auth-email-queue.js';
 import { hashPassword, signAccessToken, signRefreshToken, hashToken } from '../lib/auth.js';
 
 type MockUser = {
@@ -152,8 +165,14 @@ describe('Auth Routes Integration', () => {
     expect(otpInsert.values).toHaveBeenCalledWith(expect.objectContaining({ channel: 'email' }));
     expect(otpInsert.values).toHaveBeenCalledTimes(1);
     expect(otpInsert.values).toHaveBeenCalledWith(expect.objectContaining({ purpose: 'email_verification' }));
-    expect(sendVerificationEmail).toHaveBeenCalledWith(newUser.email, expect.any(String));
-    expect(response.json().emailDeliveryStatus).toBe('accepted');
+    expect(enqueueAuthEmailTask).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'verification',
+      userId: newUser.id,
+      credential: expect.any(String),
+      expiresAt: expect.any(String),
+    }));
+    expect(sendVerificationEmail).not.toHaveBeenCalled();
+    expect(response.json().emailDeliveryStatus).toBe('queued');
   });
 
   it('keeps registration successful but reports failed email delivery without exposing the code', async () => {
@@ -170,7 +189,7 @@ describe('Auth Routes Integration', () => {
       return callback(tx);
     });
     mockDb.insert.mockReturnValueOnce(mockInsertResult()).mockReturnValueOnce(mockInsertResult());
-    jest.mocked(sendVerificationEmail).mockResolvedValueOnce({ accepted: false, reason: 'provider_error' });
+    jest.mocked(enqueueAuthEmailTask).mockResolvedValueOnce({ queued: false, reason: 'queue_error' });
 
     const app = await buildApp();
     const response = await app.inject({
@@ -656,20 +675,25 @@ describe('Auth Routes Integration — resend-otp', () => {
     await app.close();
 
     expect(response.statusCode).toBe(200);
-    expect(response.json().message).toBe('Verification email accepted for delivery');
+    expect(response.json().message).toBe('Verification email queued for delivery');
     expect(insertResult.values).toHaveBeenCalledWith(expect.objectContaining({
       userId: TEST_USER_ID,
       channel: 'email',
       purpose: 'email_verification',
     }));
-    expect(sendVerificationEmail).toHaveBeenCalledWith('worker@example.com', expect.any(String));
+    expect(enqueueAuthEmailTask).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'verification',
+      userId: TEST_USER_ID,
+      credential: expect.any(String),
+    }));
+    expect(sendVerificationEmail).not.toHaveBeenCalled();
   });
 
   it('returns a safe retry response when email delivery fails', async () => {
     mockDb.query.otpCodes.findFirst.mockResolvedValueOnce(null);
     mockDb.query.users.findFirst.mockResolvedValueOnce(makeUser());
     mockDb.insert.mockReturnValueOnce(mockInsertResult());
-    jest.mocked(sendVerificationEmail).mockResolvedValueOnce({ accepted: false, reason: 'provider_error' });
+    jest.mocked(enqueueAuthEmailTask).mockResolvedValueOnce({ queued: false, reason: 'queue_error' });
 
     const app = await buildApp();
     const response = await app.inject({
@@ -716,6 +740,7 @@ describe('Auth Routes Integration — forgot-password', () => {
       message: 'If that email exists, a reset link has been sent.',
     });
     expect(mockDb.insert).not.toHaveBeenCalled();
+    expect(enqueueAuthEmailTask).toHaveBeenCalledWith({ type: 'noop' });
   });
 
   it('stores a reset token when the email is registered', async () => {
@@ -736,17 +761,19 @@ describe('Auth Routes Integration — forgot-password', () => {
       message: 'If that email exists, a reset link has been sent.',
     });
     expect(mockDb.insert).toHaveBeenCalledTimes(1);
-    expect(sendPasswordResetEmail).toHaveBeenCalledWith(
-      'worker@example.com',
-      expect.stringContaining('#token='),
-    );
+    expect(enqueueAuthEmailTask).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'password_reset',
+      userId: TEST_USER_ID,
+      credential: expect.stringMatching(/^[a-f0-9]{64}$/),
+    }));
+    expect(sendPasswordResetEmail).not.toHaveBeenCalled();
     expect(insertResult.values).toHaveBeenCalledWith(expect.objectContaining({ purpose: 'password_reset' }));
   });
 
   it('keeps the generic response when reset email delivery fails', async () => {
     mockDb.query.users.findFirst.mockResolvedValueOnce(makeUser());
     mockDb.insert.mockReturnValueOnce(mockInsertResult());
-    jest.mocked(sendPasswordResetEmail).mockResolvedValueOnce({ accepted: false, reason: 'provider_error' });
+    jest.mocked(enqueueAuthEmailTask).mockResolvedValueOnce({ queued: false, reason: 'queue_error' });
 
     const app = await buildApp();
     const response = await app.inject({
@@ -760,6 +787,121 @@ describe('Auth Routes Integration — forgot-password', () => {
     expect(response.json()).toEqual({
       message: 'If that email exists, a reset link has been sent.',
     });
+  });
+
+  it('rate-limits forgot-password requests by IP', async () => {
+    mockDb.query.users.findFirst.mockResolvedValue(null);
+
+    const app = await buildApp();
+    const responses = [];
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      responses.push(await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/forgot-password',
+        payload: { email: 'nobody@example.com' },
+      }));
+    }
+    await app.close();
+
+    expect(responses.slice(0, 5).every((response) => response.statusCode === 200)).toBe(true);
+    expect(responses[5].statusCode).toBe(429);
+    expect(enqueueAuthEmailTask).toHaveBeenCalledTimes(5);
+  });
+});
+
+describe('Auth Routes Integration — internal email task', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockDb.query.users.findFirst.mockReset();
+    mockDb.query.otpCodes.findFirst.mockReset();
+  });
+
+  it('rejects an unsigned task without querying credentials or sending email', async () => {
+    const app = await buildApp();
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/internal/email-delivery',
+      payload: { type: 'noop', deliveryId: crypto.randomUUID() },
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(401);
+    expect(mockDb.query.otpCodes.findFirst).not.toHaveBeenCalled();
+    expect(sendVerificationEmail).not.toHaveBeenCalled();
+  });
+
+  it('sends only a signed, current verification task with its delivery id as idempotency key', async () => {
+    const task = {
+      type: 'verification' as const,
+      userId: TEST_USER_ID,
+      credential: '123456',
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    };
+    const envelope = createAuthEmailTaskEnvelope(task, process.env.JWT_ACCESS_SECRET ?? 'test-secret', crypto.randomUUID());
+    mockDb.query.otpCodes.findFirst.mockResolvedValueOnce({ id: 'otp-current' });
+    mockDb.query.users.findFirst.mockResolvedValueOnce(makeUser());
+
+    const app = await buildApp();
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/internal/email-delivery',
+      headers: { 'x-gigs-auth-email-signature': signAuthEmailTaskEnvelope(envelope, process.env.JWT_ACCESS_SECRET ?? 'test-secret') },
+      payload: envelope,
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(204);
+    expect(sendVerificationEmail).toHaveBeenCalledWith('worker@example.com', '123456', envelope.deliveryId);
+  });
+
+  it('acknowledges an expired task without querying or sending', async () => {
+    const envelope = createAuthEmailTaskEnvelope({
+      type: 'verification',
+      userId: TEST_USER_ID,
+      credential: '123456',
+      expiresAt: new Date(Date.now() - 60_000).toISOString(),
+    }, process.env.JWT_ACCESS_SECRET ?? 'test-secret');
+
+    const app = await buildApp();
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/internal/email-delivery',
+      headers: { 'x-gigs-auth-email-signature': signAuthEmailTaskEnvelope(envelope, process.env.JWT_ACCESS_SECRET ?? 'test-secret') },
+      payload: envelope,
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(204);
+    expect(mockDb.query.otpCodes.findFirst).not.toHaveBeenCalled();
+    expect(sendVerificationEmail).not.toHaveBeenCalled();
+  });
+
+  it('sends reset links only for a signed, current reset task', async () => {
+    const resetToken = 'a1b2c3d4'.repeat(8);
+    const envelope = createAuthEmailTaskEnvelope({
+      type: 'password_reset',
+      userId: TEST_USER_ID,
+      credential: resetToken,
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    }, process.env.JWT_ACCESS_SECRET ?? 'test-secret');
+    mockDb.query.otpCodes.findFirst.mockResolvedValueOnce({ id: 'otp-reset-current' });
+    mockDb.query.users.findFirst.mockResolvedValueOnce(makeUser());
+
+    const app = await buildApp();
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/internal/email-delivery',
+      headers: { 'x-gigs-auth-email-signature': signAuthEmailTaskEnvelope(envelope, process.env.JWT_ACCESS_SECRET ?? 'test-secret') },
+      payload: envelope,
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(204);
+    expect(sendPasswordResetEmail).toHaveBeenCalledWith(
+      'worker@example.com',
+      expect.stringContaining(`#token=${resetToken}`),
+      envelope.deliveryId,
+    );
   });
 });
 

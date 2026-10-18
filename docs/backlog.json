@@ -227,7 +227,7 @@
       "priority": "high",
       "status": "in_progress",
       "phase": "m4_hardening",
-      "notes": "Implementation is on feat/resend-email-delivery: Resend verification/resend/reset delivery, minimal password-reset screens, token-purpose separation, and Cloud Run Secret Manager binding. Dev deployment and real-mailbox verification remain blocked on provisioning the resend-api-key-dev secret and granting the API runtime service account access."
+      "notes": "Implementation is on feat/resend-email-delivery: Resend verification/resend/reset delivery through encrypted, signed Cloud Tasks jobs; forgot-password rate limit; minimal reset screens; and Secret Manager binding. Dev rollout also requires the auth-email-dev queue, Cloud Tasks API, a dedicated API runtime service account with scoped Cloud SQL/secret/queue roles, Cloud Build act-as permission, and the resend-api-key-dev secret."
     },
     {
       "task": "Add end-to-end tests for user flows (e.g., gig poster creating a gig, worker applying, contract completion).",

@@ -21,6 +21,11 @@ import type { AccessTokenPayload } from '../../lib/auth.js';
 import { requireAuth } from '../../middleware/guards.js';
 import { env } from '../../config/env.js';
 import { sendPasswordResetEmail, sendVerificationEmail } from '../../lib/auth-email.js';
+import {
+  authEmailTaskSchema,
+  enqueueAuthEmailTask,
+  decryptAuthEmailTaskEnvelope,
+} from '../../lib/auth-email-queue.js';
 
 const OTP_EXPIRY_MS = 15 * 60 * 1000; // 15 minutes
 const OTP_RESEND_COOLDOWN_MS = 60 * 1000;
@@ -82,11 +87,14 @@ export async function authRoutes(app: FastifyInstance) {
       expiresAt,
     });
 
-    const emailResult = await sendVerificationEmail(newUser.email, emailCode);
-    if (emailResult.accepted) {
-      request.log.info({ event: 'auth_email_accepted', type: 'verification', messageId: emailResult.messageId });
-    } else {
-      request.log.error({ event: 'auth_email_delivery_failed', type: 'verification', reason: emailResult.reason });
+    const emailResult = await enqueueAuthEmailTask({
+      type: 'verification',
+      userId: newUser.id,
+      credential: emailCode,
+      expiresAt: expiresAt.toISOString(),
+    });
+    if (!emailResult.queued) {
+      request.log.error({ event: 'auth_email_enqueue_failed', type: 'verification', reason: emailResult.reason });
     }
 
     // Issue tokens
@@ -130,10 +138,10 @@ export async function authRoutes(app: FastifyInstance) {
         emailVerified: newUser.emailVerified,
         phoneVerified: newUser.phoneVerified,
       },
-      emailDeliveryStatus: emailResult.accepted
-        ? 'accepted'
+      emailDeliveryStatus: emailResult.queued
+        ? 'queued'
         : env.NODE_ENV === 'development' ? 'development_code' : 'failed',
-      ...(!emailResult.accepted && env.NODE_ENV !== 'development' && {
+      ...(!emailResult.queued && env.NODE_ENV !== 'development' && {
         retryAfterSeconds: OTP_RESEND_COOLDOWN_MS / 1000,
       }),
       ...(devOtp && { _dev: devOtp }),
@@ -332,11 +340,16 @@ export async function authRoutes(app: FastifyInstance) {
       expiresAt,
     });
 
-    const emailResult = await sendVerificationEmail(user.email, code);
+    const emailResult = await enqueueAuthEmailTask({
+      type: 'verification',
+      userId: request.user.sub,
+      credential: code,
+      expiresAt: expiresAt.toISOString(),
+    });
     const devOtp = env.NODE_ENV === 'development' ? { code } : undefined;
 
-    if (!emailResult.accepted && env.NODE_ENV !== 'development') {
-      request.log.error({ event: 'auth_email_delivery_failed', type: 'verification', reason: emailResult.reason });
+    if (!emailResult.queued && env.NODE_ENV !== 'development') {
+      request.log.error({ event: 'auth_email_enqueue_failed', type: 'verification', reason: emailResult.reason });
       return reply.status(503).send({
         error: 'Verification email is temporarily unavailable. Please try again later.',
         code: 'EMAIL_DELIVERY_UNAVAILABLE',
@@ -344,13 +357,13 @@ export async function authRoutes(app: FastifyInstance) {
         statusCode: 503,
       });
     }
-    if (emailResult.accepted) {
-      request.log.info({ event: 'auth_email_accepted', type: 'verification', messageId: emailResult.messageId });
+    if (emailResult.queued) {
+      request.log.info({ event: 'auth_email_queued', type: 'verification', deliveryId: emailResult.deliveryId });
     }
 
     return reply.send({
-      message: emailResult.accepted ? 'Verification email accepted for delivery' : 'Verification code available in development',
-      emailDeliveryStatus: emailResult.accepted ? 'accepted' : 'development_code',
+      message: emailResult.queued ? 'Verification email queued for delivery' : 'Verification code available in development',
+      emailDeliveryStatus: emailResult.queued ? 'queued' : 'development_code',
       ...(devOtp && { _dev: devOtp }),
     });
   });
@@ -448,7 +461,9 @@ export async function authRoutes(app: FastifyInstance) {
   });
 
   // ── POST /forgot-password ──
-  app.post('/forgot-password', async (request, reply) => {
+  app.post('/forgot-password', {
+    config: { rateLimit: { max: 5, timeWindow: '15 minutes' } },
+  }, async (request, reply) => {
     const body = forgotPasswordSchema.parse(request.body);
 
     const user = await db.query.users.findFirst({
@@ -456,38 +471,101 @@ export async function authRoutes(app: FastifyInstance) {
     });
 
     // Always return success to prevent email enumeration
+    let devToken: { resetToken: string } | undefined;
     if (!user) {
-      return reply.send({ message: 'If that email exists, a reset link has been sent.' });
-    }
-
-    // Generate a reset token (stored as OTP with 'email' channel, special prefix)
-    const resetToken = crypto.randomBytes(32).toString('hex');
-    const tokenHash = await hashOtp(resetToken);
-    const expiresAt = new Date(Date.now() + OTP_EXPIRY_MS);
-
-    await db.insert(otpCodes).values({
-      userId: user.id,
-      channel: 'email',
-      purpose: PASSWORD_RESET_PURPOSE,
-      codeHash: tokenHash,
-      expiresAt,
-    });
-
-    const resetUrl = new URL('/reset-password', env.FRONTEND_URL);
-    resetUrl.hash = new URLSearchParams({ token: resetToken }).toString();
-    const emailResult = await sendPasswordResetEmail(user.email, resetUrl.toString());
-    if (!emailResult.accepted) {
-      request.log.error({ event: 'auth_email_delivery_failed', type: 'password_reset', reason: emailResult.reason });
+      const enqueueResult = await enqueueAuthEmailTask({ type: 'noop' });
+      if (enqueueResult.queued) {
+        request.log.info({ event: 'auth_email_queued', type: 'password_reset', deliveryId: enqueueResult.deliveryId });
+      } else {
+        request.log.error({ event: 'auth_email_enqueue_failed', type: 'password_reset', reason: enqueueResult.reason });
+      }
     } else {
-      request.log.info({ event: 'auth_email_accepted', type: 'password_reset', messageId: emailResult.messageId });
-    }
+      const resetToken = crypto.randomBytes(32).toString('hex');
+      const tokenHash = await hashOtp(resetToken);
+      const expiresAt = new Date(Date.now() + OTP_EXPIRY_MS);
 
-    const devToken = env.NODE_ENV === 'development' ? { resetToken } : undefined;
+      await db.insert(otpCodes).values({
+        userId: user.id,
+        channel: 'email',
+        purpose: PASSWORD_RESET_PURPOSE,
+        codeHash: tokenHash,
+        expiresAt,
+      });
+
+      const enqueueResult = await enqueueAuthEmailTask({
+        type: 'password_reset',
+        userId: user.id,
+        credential: resetToken,
+        expiresAt: expiresAt.toISOString(),
+      });
+      if (!enqueueResult.queued) {
+        request.log.error({ event: 'auth_email_enqueue_failed', type: 'password_reset', reason: enqueueResult.reason });
+      } else {
+        request.log.info({ event: 'auth_email_queued', type: 'password_reset', deliveryId: enqueueResult.deliveryId });
+      }
+      if (env.NODE_ENV === 'development') devToken = { resetToken };
+    }
 
     return reply.send({
       message: 'If that email exists, a reset link has been sent.',
       ...(devToken && { _dev: devToken }),
     });
+  });
+
+  // Cloud Tasks retries this signed endpoint; credentials are validated against
+  // their current database record before Resend is called.
+  app.post('/internal/email-delivery', async (request, reply) => {
+    const signature = request.headers['x-gigs-auth-email-signature'];
+    const decodedTask = typeof signature === 'string'
+      ? decryptAuthEmailTaskEnvelope(request.body, signature, env.JWT_ACCESS_SECRET)
+      : null;
+    if (!decodedTask) {
+      return reply.status(401).send({ error: 'Invalid task signature', statusCode: 401 });
+    }
+
+    const { task, deliveryId } = decodedTask;
+    if (task.type === 'noop' || new Date(task.expiresAt).getTime() <= Date.now()) {
+      return reply.status(204).send();
+    }
+
+    const purpose = task.type === 'verification' ? EMAIL_VERIFICATION_PURPOSE : PASSWORD_RESET_PURPOSE;
+    const otp = await db.query.otpCodes.findFirst({
+      where: and(
+        eq(otpCodes.userId, task.userId),
+        eq(otpCodes.channel, 'email'),
+        eq(otpCodes.purpose, purpose),
+        eq(otpCodes.codeHash, await hashOtp(task.credential)),
+        isNull(otpCodes.usedAt),
+        gt(otpCodes.expiresAt, new Date()),
+      ),
+    });
+    if (!otp) return reply.status(204).send();
+
+    const user = await db.query.users.findFirst({
+      where: eq(users.id, task.userId),
+      columns: { email: true },
+    });
+    if (!user) return reply.status(204).send();
+
+    const result = task.type === 'verification'
+      ? await sendVerificationEmail(user.email, task.credential, deliveryId)
+      : await sendPasswordResetEmail(
+          user.email,
+          (() => {
+            const resetUrl = new URL('/reset-password', env.FRONTEND_URL);
+            resetUrl.hash = new URLSearchParams({ token: task.credential }).toString();
+            return resetUrl.toString();
+          })(),
+          deliveryId,
+        );
+
+    if (!result.accepted) {
+      request.log.error({ event: 'auth_email_delivery_failed', type: task.type, reason: result.reason });
+      return reply.status(503).send({ error: 'Email delivery temporarily unavailable', statusCode: 503 });
+    }
+
+    request.log.info({ event: 'auth_email_accepted', type: task.type, messageId: result.messageId });
+    return reply.status(204).send();
   });
 
   // ── POST /reset-password ──

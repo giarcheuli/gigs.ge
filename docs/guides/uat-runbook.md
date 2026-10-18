@@ -68,7 +68,9 @@ the underlying Cloud Run URLs (gigsge-web/gigsge-api â€¦run.app) keep working as
 
 The web auth screens (`/login`, `/register`, `/verify`) and shared API helper use a production safeguard: if `_API_URL` is missing or points to localhost, they fall back to the hosted API URL above so authentication does not break in UAT.
 
-For deployed email delivery, create a Secret Manager secret for each environment (for example, `resend-api-key-dev` and `resend-api-key-uat`) and store that environment's Resend sending key there. Grant `roles/secretmanager.secretAccessor` to the Cloud Run API service's runtime service account. Set the matching Cloud Build trigger substitution `_RESEND_API_SECRET` to the secret name; Cloud Build binds the secret to `RESEND_API_KEY` at runtime. Do not put the key in trigger substitutions, source files, or build arguments.
+For deployed email delivery, create a dedicated service account named `gigsge-api-runtime` and configure Cloud Run to use it. Grant it Cloud SQL Client on the project, Secret Manager Secret Accessor only on the environment's Resend secret, and Cloud Tasks Enqueuer only on that environment's queue. Grant the Cloud Build service account Service Account User on this runtime account. Create a Secret Manager secret per environment (for example, `resend-api-key-dev` and `resend-api-key-uat`) and store that environment's Resend sending key there. Set `_RESEND_API_SECRET` to the secret name; Cloud Run receives it as `RESEND_API_KEY`. Do not put the key in trigger substitutions, source files, or build arguments.
+
+Email jobs use Cloud Tasks. Enable the Cloud Tasks API and create a queue in `us-central1` (for dev, `auth-email-dev`). Set the dev trigger's `_AUTH_EMAIL_QUEUE` substitution to `auth-email-dev`. The API sends only encrypted, signed task payloads; the task handler rejects invalid signatures and expired or used credentials.
 
 ---
 
@@ -228,7 +230,7 @@ To test price locking: open the gig in a private window **without logging in** â
 
 In local development without a Resend key, registration and resend responses include development-only codes. The web screens log those codes to the browser console. Password-reset responses similarly include a development-only token. These values are never returned by a deployed production-mode API.
 
-With the dev Secret Manager key configured, register a new account and confirm the verification message arrives from `noreply@gigs.ge`. Test resend cooldown, then use **Forgot your password?** on the sign-in page to request a reset link and complete the reset.
+With the dev Secret Manager key and Cloud Tasks queue configured, register a new account and confirm the verification message arrives from `noreply@gigs.ge`. Test resend cooldown and forgot-password rate limits, then use **Forgot your password?** on the sign-in page to request a reset link and complete the reset.
 
 Resend acceptance means the provider queued the message; check the destination mailbox's spam folder if it does not appear.
 

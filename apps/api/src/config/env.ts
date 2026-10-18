@@ -29,6 +29,10 @@ export const env = {
 
   DATABASE_URL: buildDatabaseUrl(),
   REDIS_URL: process.env.REDIS_URL ?? 'redis://localhost:6379',
+  GCP_PROJECT_ID: process.env.GCP_PROJECT_ID ?? process.env.GOOGLE_CLOUD_PROJECT ?? process.env.GCLOUD_PROJECT ?? '',
+  AUTH_EMAIL_TASK_LOCATION: process.env.AUTH_EMAIL_TASK_LOCATION ?? 'us-central1',
+  AUTH_EMAIL_TASK_QUEUE: process.env.AUTH_EMAIL_TASK_QUEUE ?? '',
+  AUTH_EMAIL_TASK_TARGET_URL: process.env.AUTH_EMAIL_TASK_TARGET_URL ?? '',
 
   JWT_ACCESS_SECRET: required('JWT_ACCESS_SECRET'),
   JWT_REFRESH_SECRET: required('JWT_REFRESH_SECRET'),

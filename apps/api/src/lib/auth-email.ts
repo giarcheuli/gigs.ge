@@ -11,7 +11,7 @@ type AuthEmailOptions = {
 
 export type AuthEmailClient = {
   emails: {
-    send(options: AuthEmailOptions): Promise<{
+    send(options: AuthEmailOptions, requestOptions?: { idempotencyKey?: string }): Promise<{
       data: { id: string } | null;
       error: unknown | null;
     }>;
@@ -30,11 +30,17 @@ const escapeHtml = (value: string) => value
   .replaceAll("'", '&#039;');
 
 export function createAuthEmailSender(client: AuthEmailClient | null, from: string) {
-  async function send(options: Omit<AuthEmailOptions, 'from'>): Promise<AuthEmailResult> {
+  async function send(
+    options: Omit<AuthEmailOptions, 'from'>,
+    idempotencyKey?: string,
+  ): Promise<AuthEmailResult> {
     if (!client) return { accepted: false, reason: 'not_configured' };
 
     try {
-      const { data, error } = await client.emails.send({ ...options, from });
+      const { data, error } = await client.emails.send(
+        { ...options, from },
+        idempotencyKey ? { idempotencyKey } : undefined,
+      );
       if (error || !data?.id) return { accepted: false, reason: 'provider_error' };
       return { accepted: true, messageId: data.id };
     } catch {
@@ -43,22 +49,22 @@ export function createAuthEmailSender(client: AuthEmailClient | null, from: stri
   }
 
   return {
-    sendVerificationEmail(to: string, code: string) {
+    sendVerificationEmail(to: string, code: string, idempotencyKey?: string) {
       return send({
         to,
         subject: 'Verify your gigs.ge email',
         text: `Your gigs.ge verification code is ${code}. It expires in 15 minutes. If you did not create this account, you can ignore this email.`,
         html: `<p>Your gigs.ge verification code is <strong>${escapeHtml(code)}</strong>.</p><p>It expires in 15 minutes. If you did not create this account, you can ignore this email.</p>`,
-      });
+      }, idempotencyKey);
     },
-    sendPasswordResetEmail(to: string, resetUrl: string) {
+    sendPasswordResetEmail(to: string, resetUrl: string, idempotencyKey?: string) {
       const safeUrl = escapeHtml(resetUrl);
       return send({
         to,
         subject: 'Reset your gigs.ge password',
         text: `Use this link to reset your gigs.ge password. It expires in 15 minutes. If you did not request a reset, you can ignore this email.\n\n${resetUrl}`,
         html: `<p>Use the link below to reset your gigs.ge password. It expires in 15 minutes.</p><p><a href="${safeUrl}">Reset password</a></p><p>If you did not request a reset, you can ignore this email.</p>`,
-      });
+      }, idempotencyKey);
     },
   };
 }
