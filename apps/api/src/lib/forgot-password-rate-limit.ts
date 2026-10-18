@@ -4,30 +4,46 @@ import { db } from '../db/index.js';
 import { authRateLimitBuckets } from '../db/schema/index.js';
 import { env } from '../config/env.js';
 
-const WINDOW_MS = 15 * 60 * 1000;
-const MAX_REQUESTS = 5;
-
-export type ForgotPasswordRateLimitResult =
+export type IpRateLimitResult =
   | { allowed: true }
   | { allowed: false; retryAfterSeconds: number };
 
 type IncrementCounter = (bucketKey: string, expiresAt: Date) => Promise<number>;
 
-export function createForgotPasswordRateLimiter(incrementCounter: IncrementCounter) {
-  return async (ip: string, nowMs = Date.now()): Promise<ForgotPasswordRateLimitResult> => {
-    const windowStartMs = Math.floor(nowMs / WINDOW_MS) * WINDOW_MS;
-    const windowEndMs = windowStartMs + WINDOW_MS;
+export function createIpRateLimiter(
+  incrementCounter: IncrementCounter,
+  config: { scope: string; maxRequests: number; windowMs: number },
+) {
+  return async (ip: string, nowMs = Date.now()): Promise<IpRateLimitResult> => {
+    const windowStartMs = Math.floor(nowMs / config.windowMs) * config.windowMs;
+    const windowEndMs = windowStartMs + config.windowMs;
     const bucketKey = createHmac('sha256', env.JWT_ACCESS_SECRET)
-      .update(`${ip}:${windowStartMs}`)
+      .update(`${config.scope}:${ip}:${windowStartMs}`)
       .digest('hex');
     const count = await incrementCounter(bucketKey, new Date(windowEndMs));
 
-    if (count <= MAX_REQUESTS) return { allowed: true };
+    if (count <= config.maxRequests) return { allowed: true };
     return {
       allowed: false,
       retryAfterSeconds: Math.max(1, Math.ceil((windowEndMs - nowMs) / 1000)),
     };
   };
+}
+
+export function createForgotPasswordRateLimiter(incrementCounter: IncrementCounter) {
+  return createIpRateLimiter(incrementCounter, {
+    scope: 'forgot-password',
+    maxRequests: 5,
+    windowMs: 15 * 60 * 1000,
+  });
+}
+
+export function createAuthIpRateLimiter(incrementCounter: IncrementCounter) {
+  return createIpRateLimiter(incrementCounter, {
+    scope: 'auth',
+    maxRequests: 10,
+    windowMs: 60 * 1000,
+  });
 }
 
 const incrementDatabaseCounter: IncrementCounter = async (bucketKey, expiresAt) => {
@@ -46,3 +62,4 @@ const incrementDatabaseCounter: IncrementCounter = async (bucketKey, expiresAt) 
 };
 
 export const consumeForgotPasswordRateLimit = createForgotPasswordRateLimiter(incrementDatabaseCounter);
+export const consumeAuthIpRateLimit = createAuthIpRateLimiter(incrementDatabaseCounter);

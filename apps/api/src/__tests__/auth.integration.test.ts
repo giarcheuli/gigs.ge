@@ -31,6 +31,7 @@ jest.mock('../lib/auth-email-queue.js', () => {
 });
 
 jest.mock('../lib/forgot-password-rate-limit.js', () => ({
+  consumeAuthIpRateLimit: jest.fn().mockResolvedValue({ allowed: true }),
   consumeForgotPasswordRateLimit: jest.fn().mockResolvedValue({ allowed: true }),
 }));
 
@@ -43,7 +44,7 @@ import {
   enqueueAuthEmailTask,
   signAuthEmailTaskEnvelope,
 } from '../lib/auth-email-queue.js';
-import { consumeForgotPasswordRateLimit } from '../lib/forgot-password-rate-limit.js';
+import { consumeAuthIpRateLimit, consumeForgotPasswordRateLimit } from '../lib/forgot-password-rate-limit.js';
 import { hashPassword, signAccessToken, signRefreshToken, hashToken } from '../lib/auth.js';
 
 type MockUser = {
@@ -324,6 +325,25 @@ describe('Auth Routes Integration', () => {
       error: 'Invalid email or password',
       statusCode: 401,
     });
+  });
+
+  it('enforces the shared auth IP limit before looking up login credentials', async () => {
+    jest.mocked(consumeAuthIpRateLimit).mockResolvedValueOnce({
+      allowed: false,
+      retryAfterSeconds: 60,
+    });
+
+    const app = await buildApp();
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/login',
+      payload: { email: 'worker@example.com', password: 'WrongPassword123' },
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(429);
+    expect(response.json()).toMatchObject({ code: 'AUTH_RATE_LIMIT', retryAfterSeconds: 60 });
+    expect(mockDb.query.users.findFirst).not.toHaveBeenCalled();
   });
 });
 

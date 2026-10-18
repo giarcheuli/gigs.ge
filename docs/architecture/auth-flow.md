@@ -117,6 +117,8 @@ app.post('/gigs', {
 | Password reset | 5 req/15min per IP | Limit reset abuse and email flooding |
 | General API | 100 req/min per user | Fair use |
 
+Auth IP limits use atomic fixed-window counters in Postgres so they are shared across Cloud Run instances. The bucket key is an HMAC of the client IP and time window; raw IPs are not stored. Fastify trusts the two Cloud Run forwarded hops, and integration tests verify that a forged leftmost `X-Forwarded-For` value is ignored.
+
 ## Security Decisions
 
 1. **No token in localStorage.** The access token lives in memory (React state / context). On page refresh, the client calls `/auth/refresh` to get a new one.

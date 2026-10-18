@@ -26,7 +26,10 @@ import {
   enqueueAuthEmailTask,
   decryptAuthEmailTaskEnvelope,
 } from '../../lib/auth-email-queue.js';
-import { consumeForgotPasswordRateLimit } from '../../lib/forgot-password-rate-limit.js';
+import {
+  consumeAuthIpRateLimit,
+  consumeForgotPasswordRateLimit,
+} from '../../lib/forgot-password-rate-limit.js';
 
 const OTP_EXPIRY_MS = 15 * 60 * 1000; // 15 minutes
 const OTP_RESEND_COOLDOWN_MS = 60 * 1000;
@@ -35,6 +38,22 @@ const EMAIL_VERIFICATION_PURPOSE = 'email_verification';
 const PASSWORD_RESET_PURPOSE = 'password_reset';
 
 export async function authRoutes(app: FastifyInstance) {
+  app.addHook('preHandler', async (request, reply) => {
+    if (request.url.includes('/internal/email-delivery')) return;
+
+    const rateLimit = await consumeAuthIpRateLimit(request.ip);
+    if (!rateLimit.allowed) {
+      return reply.status(429)
+        .header('Retry-After', String(rateLimit.retryAfterSeconds))
+        .send({
+          error: 'Too many authentication requests. Try again later.',
+          code: 'AUTH_RATE_LIMIT',
+          retryAfterSeconds: rateLimit.retryAfterSeconds,
+          statusCode: 429,
+        });
+    }
+  });
+
   // ── POST /register ──
   app.post('/register', async (request, reply) => {
     const body = registerSchema.parse(request.body);
