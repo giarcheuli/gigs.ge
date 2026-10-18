@@ -610,18 +610,32 @@ export async function authRoutes(app: FastifyInstance) {
 
     const passwordHash = await hashPassword(body.password);
 
-    await db.transaction(async (tx) => {
-      // Mark token as used
-      await tx.update(otpCodes).set({ usedAt: new Date() }).where(eq(otpCodes.id, otp.id));
+    const claimedUser = await db.transaction(async (tx) => {
+      const [claimed] = await tx.update(otpCodes)
+        .set({ usedAt: new Date() })
+        .where(and(
+          eq(otpCodes.id, otp.id),
+          eq(otpCodes.purpose, PASSWORD_RESET_PURPOSE),
+          isNull(otpCodes.usedAt),
+          gt(otpCodes.expiresAt, new Date()),
+        ))
+        .returning({ userId: otpCodes.userId });
+
+      if (!claimed) return null;
 
       // Update password
-      await tx.update(users).set({ passwordHash, updatedAt: new Date() }).where(eq(users.id, otp.userId));
+      await tx.update(users).set({ passwordHash, updatedAt: new Date() }).where(eq(users.id, claimed.userId));
 
       // Revoke all refresh tokens for this user
       await tx.update(refreshTokens)
         .set({ revokedAt: new Date() })
-        .where(and(eq(refreshTokens.userId, otp.userId), isNull(refreshTokens.revokedAt)));
+        .where(and(eq(refreshTokens.userId, claimed.userId), isNull(refreshTokens.revokedAt)));
+      return claimed;
     });
+
+    if (!claimedUser) {
+      return reply.status(400).send({ error: 'Invalid or expired reset token', statusCode: 400 });
+    }
 
     return reply.send({ message: 'Password reset successful. Please log in.' });
   });

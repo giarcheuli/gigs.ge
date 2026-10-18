@@ -976,11 +976,16 @@ describe('Auth Routes Integration — reset-password', () => {
     });
     mockDb.transaction.mockImplementation(async (callback: (tx: unknown) => Promise<unknown>) => {
       const tx = {
-        update: jest.fn().mockReturnValue({
-          set: jest.fn().mockReturnValue({
-            where: jest.fn().mockResolvedValue(undefined),
-          }),
-        }),
+        update: jest.fn()
+          .mockReturnValueOnce({
+            set: jest.fn().mockReturnValue({
+              where: jest.fn().mockReturnValue({
+                returning: jest.fn().mockResolvedValue([{ userId: TEST_USER_ID }]),
+              }),
+            }),
+          })
+          .mockReturnValueOnce(mockUpdateResult())
+          .mockReturnValueOnce(mockUpdateResult()),
       };
       return callback(tx);
     });
@@ -996,6 +1001,36 @@ describe('Auth Routes Integration — reset-password', () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({ message: 'Password reset successful. Please log in.' });
     expect(mockDb.transaction).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects a reset token if another request claimed it first', async () => {
+    const resetToken = 'a1b2c3d4'.repeat(8);
+    mockDb.query.otpCodes.findFirst.mockResolvedValueOnce({
+      id: 'otp-reset-race',
+      userId: TEST_USER_ID,
+      codeHash: crypto.createHash('sha256').update(resetToken).digest('hex'),
+    });
+    mockDb.transaction.mockImplementation(async (callback: (tx: unknown) => Promise<unknown>) => {
+      const tx = {
+        update: jest.fn().mockReturnValue({
+          set: jest.fn().mockReturnValue({
+            where: jest.fn().mockReturnValue({ returning: jest.fn().mockResolvedValue([]) }),
+          }),
+        }),
+      };
+      return callback(tx);
+    });
+
+    const app = await buildApp();
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/reset-password',
+      payload: { token: resetToken, password: 'NewPassword123' },
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({ error: 'Invalid or expired reset token', statusCode: 400 });
   });
 });
 

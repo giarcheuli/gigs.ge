@@ -18,6 +18,17 @@
 # NEVER put real secret values in this file. This file is in source control.
 
 steps:
+  # Fail before building if an environment has not supplied its isolated email resources.
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: bash
+    args:
+      - '-c'
+      - |
+        if [[ -z "${_RESEND_API_SECRET}" || -z "${_AUTH_EMAIL_QUEUE}" || -z "${_API_RUNTIME_SERVICE_ACCOUNT}" || -z "${_API_URL}" || -z "${_FRONTEND_URL}" ]]; then
+          echo "Required per-environment email/runtime substitutions are missing." >&2
+          exit 1
+        fi
+
   # ── 0. Ensure Cloud SQL database exists ───────────────────────────────────
   # Runs before any build step. Succeeds whether or not the DB already exists.
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
