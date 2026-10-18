@@ -4,7 +4,7 @@ export { refreshTokens } from './auth';
 export { regions, cities } from './regions';
 export { gigs, gigImages } from './gigs';
 export { applications, applicationAttachments } from './applications';
-export { contracts, contractAppendices, disputeEvidence, disputeEvidenceFiles } from './contracts';
+export { contracts, contractCancellationRequests, contractAppendices, disputeEvidence, disputeEvidenceFiles } from './contracts';
 export { billingLedger, invoices } from './billing';
 export { reviews } from './reviews';
 export { notifications, messages } from './messages';

@@ -15,6 +15,7 @@
  *   terminal states  → read-only summary
  */
 
+import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -58,6 +59,16 @@ interface Contract {
   application: Application;
 }
 
+interface CancellationRequest {
+  id: string;
+  requesterId: string;
+  recipientId: string;
+  reason: string | null;
+  status: 'pending' | 'accepted' | 'declined' | 'withdrawn' | 'superseded';
+  createdAt: string;
+  resolvedAt: string | null;
+}
+
 // ── Half-time helper ───────────────────────────────────────────────────────────
 
 function computeHalfTimePassed(contract: Contract, userEmail: string): boolean {
@@ -85,19 +96,22 @@ export default function ContractDetailPage() {
   const qc = useQueryClient();
 
   const {
-    data: contract,
+    data: contractData,
     isLoading,
     isError,
-  } = useQuery<Contract>({
+  } = useQuery<{ contract: Contract; cancellationRequest: CancellationRequest | null }>({
     queryKey: ['contract', params.id],
     enabled: Boolean(user),
     queryFn: async () => {
       const res = await apiFetch(`/contracts/${params.id}`);
       if (!res.ok) throw new Error('Not found');
-      const body = (await res.json()) as { contract: Contract };
-      return body.contract;
+      const body = (await res.json()) as { contract: Contract; cancellationRequest: CancellationRequest | null };
+      return body;
     },
   });
+
+  const contract = contractData?.contract;
+  const cancellationRequest = contractData?.cancellationRequest ?? null;
 
   if (!user) {
     return (
@@ -157,21 +171,66 @@ export default function ContractDetailPage() {
   const signMutation = useAction('sign');
   const markCompleteMutation = useAction('mark-complete');
   const disputeMutation = useAction('dispute');
-  const cancelMutation = useAction('cancel');
   const quitMutation = useAction('quit');
+  const [cancelReason, setCancelReason] = useState('');
+  const [showCancelForm, setShowCancelForm] = useState(false);
+  const cancellationRequestMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiFetch(`/contracts/${contract!.id}/cancellation-requests`, {
+        method: 'POST',
+        body: JSON.stringify({ reason: cancelReason.trim() || undefined }),
+      });
+      if (!res.ok) {
+        const body = (await res.json()) as { error?: string };
+        throw new Error(body.error ?? 'Could not send cancellation request');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      setShowCancelForm(false);
+      setCancelReason('');
+      qc.invalidateQueries({ queryKey: ['contract', params.id] });
+    },
+  });
+  const cancellationResponseMutation = useMutation({
+    mutationFn: async (decision: 'accept' | 'decline') => {
+      const res = await apiFetch(`/contracts/${contract!.id}/cancellation-requests/${cancellationRequest!.id}/${decision}`, { method: 'POST' });
+      if (!res.ok) {
+        const body = (await res.json()) as { error?: string };
+        throw new Error(body.error ?? 'Could not respond to cancellation request');
+      }
+      return res.json();
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['contract', params.id] }),
+  });
+  const withdrawCancellationMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiFetch(`/contracts/${contract!.id}/cancellation-requests/${cancellationRequest!.id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const body = (await res.json()) as { error?: string };
+        throw new Error(body.error ?? 'Could not withdraw cancellation request');
+      }
+      return res.json();
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['contract', params.id] }),
+  });
 
   const anyPending =
     signMutation.isPending ||
     markCompleteMutation.isPending ||
     disputeMutation.isPending ||
-    cancelMutation.isPending ||
+    cancellationRequestMutation.isPending ||
+    cancellationResponseMutation.isPending ||
+    withdrawCancellationMutation.isPending ||
     quitMutation.isPending;
 
   const actionError =
     signMutation.error?.message ??
     markCompleteMutation.error?.message ??
     disputeMutation.error?.message ??
-    cancelMutation.error?.message ??
+    cancellationRequestMutation.error?.message ??
+    cancellationResponseMutation.error?.message ??
+    withdrawCancellationMutation.error?.message ??
     quitMutation.error?.message ??
     null;
 
@@ -188,6 +247,27 @@ export default function ContractDetailPage() {
 
         {/* Status banner */}
         <StatusBanner status={contract.status} />
+
+        {cancellationRequest?.status === 'accepted' && (
+          <section className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800" role="status">
+            You both agreed to cancel. The contract is cancelled and no platform fee is due.
+          </section>
+        )}
+        {cancellationRequest?.status === 'superseded' && (
+          <section className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700" role="status">
+            The contract changed before the cancellation request was answered. The request is closed.
+          </section>
+        )}
+        {cancellationRequest?.status === 'declined' && contract.status === 'in_progress' && (
+          <section className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700" role="status">
+            The cancellation request was declined. The contract remains active.
+          </section>
+        )}
+        {cancellationRequest?.status === 'withdrawn' && contract.status === 'in_progress' && (
+          <section className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700" role="status">
+            The cancellation request was withdrawn. The contract remains active.
+          </section>
+        )}
 
         {/* Contract terms */}
         <section className="bg-white rounded-xl p-5 border border-gray-100 space-y-3">
@@ -352,15 +432,83 @@ export default function ContractDetailPage() {
                 </p>
               )}
 
-              {/* Cancel — in_progress (either party) */}
-              {(isPoster || isWorker) && contract.status === 'in_progress' && (
-                <ActionButton
-                  label="Cancel contract"
-                  color="gray"
-                  loading={cancelMutation.isPending}
-                  disabled={anyPending}
-                  onClick={() => cancelMutation.mutate()}
-                />
+              {contract.status === 'in_progress' && cancellationRequest?.status === 'pending' && (
+                cancellationRequest.requesterId === user.id ? (
+                  <div className="space-y-2 rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                    <p className="font-semibold">Cancellation request sent</p>
+                    <p>The contract is still active while you wait for the other party.</p>
+                    {cancellationRequest.reason && <p>Reason: {cancellationRequest.reason}</p>}
+                    <ActionButton
+                      label="Withdraw request"
+                      color="gray"
+                      loading={withdrawCancellationMutation.isPending}
+                      disabled={anyPending}
+                      onClick={() => withdrawCancellationMutation.mutate()}
+                    />
+                  </div>
+                ) : (
+                  <div className="space-y-3 rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                    <p className="font-semibold">The other party asked to cancel</p>
+                    <p>The contract remains active unless you agree.</p>
+                    {cancellationRequest.reason && <p>Reason: {cancellationRequest.reason}</p>}
+                    <p>Agreeing ends the contract for both parties. No platform fee will be due.</p>
+                    <div className="flex flex-col gap-2">
+                      <ActionButton
+                        label="Agree and cancel"
+                        color="red"
+                        loading={cancellationResponseMutation.isPending}
+                        disabled={anyPending}
+                        onClick={() => cancellationResponseMutation.mutate('accept')}
+                      />
+                      <ActionButton
+                        label="Decline request"
+                        color="gray"
+                        loading={cancellationResponseMutation.isPending}
+                        disabled={anyPending}
+                        onClick={() => cancellationResponseMutation.mutate('decline')}
+                      />
+                    </div>
+                  </div>
+                )
+              )}
+
+              {contract.status === 'in_progress' && cancellationRequest?.status !== 'pending' && !showCancelForm && (
+                <div className="space-y-2">
+                  <p className="text-xs text-gray-500">Cancellation requires agreement from both parties. If work is incomplete, raise a dispute instead.</p>
+                  <ActionButton
+                    label="Request cancellation"
+                    color="gray"
+                    loading={false}
+                    disabled={anyPending}
+                    onClick={() => setShowCancelForm(true)}
+                  />
+                </div>
+              )}
+
+              {contract.status === 'in_progress' && showCancelForm && cancellationRequest?.status !== 'pending' && (
+                <div className="space-y-3 rounded-md border border-gray-200 bg-gray-50 p-4">
+                  <p className="text-sm text-gray-700">The contract stays active until the other party agrees. Mutual cancellation has no platform fee.</p>
+                  <label className="block text-sm font-medium text-gray-700" htmlFor="cancellation-reason">Reason (optional)</label>
+                  <textarea
+                    id="cancellation-reason"
+                    value={cancelReason}
+                    onChange={(event) => setCancelReason(event.target.value.slice(0, 1000))}
+                    rows={3}
+                    maxLength={1000}
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                  />
+                  <p className="text-xs text-gray-500">{cancelReason.length}/1000</p>
+                  <div className="flex flex-col gap-2">
+                    <ActionButton
+                      label="Send request"
+                      color="brand"
+                      loading={cancellationRequestMutation.isPending}
+                      disabled={anyPending}
+                      onClick={() => cancellationRequestMutation.mutate()}
+                    />
+                    <button type="button" onClick={() => setShowCancelForm(false)} className="py-2 text-sm text-gray-600">Keep contract</button>
+                  </div>
+                </div>
               )}
 
               {/* Worker: quit (in_progress) */}

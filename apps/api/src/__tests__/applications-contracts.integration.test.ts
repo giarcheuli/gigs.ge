@@ -134,6 +134,22 @@ const mockUpdateReturning = (result: unknown) => ({
   }),
 });
 
+const mockSelectRows = (rows: unknown[]) => ({
+  from: jest.fn().mockReturnValue({
+    where: jest.fn().mockReturnValue({
+      for: jest.fn().mockResolvedValue(rows),
+    }),
+  }),
+});
+
+const mockTransactionUpdateReturning = (result: unknown) => ({
+  set: jest.fn().mockReturnValue({
+    where: jest.fn().mockReturnValue({
+      returning: jest.fn().mockResolvedValue([result]),
+    }),
+  }),
+});
+
 describe('Applications + Contracts Routes Integration', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -337,6 +353,7 @@ describe('Applications + Contracts Routes Integration', () => {
 
     expect(fetchResponse.statusCode).toBe(200);
     expect(fetchResponse.json()).toEqual({
+      cancellationRequest: null,
       contract: expect.objectContaining({
         ...contractDraft,
         agreedStartAt: contractDraft.agreedStartAt.toISOString(),
@@ -559,19 +576,10 @@ describe('Applications + Contracts Routes Integration', () => {
     expect(response.json().error).toMatch(/half-time/i);
   });
 
-  // ── cancel ─────────────────────────────────────────────────────────────────
+  // ── mutual cancellation ───────────────────────────────────────────────────
 
-  it('either party can cancel an in_progress contract (fee applies outside grace)', async () => {
-    const cancelled = {
-      ...inProgressContract,
-      status: 'cancelled',
-      cancelledAt: new Date('2026-05-11T12:00:00.000Z'),
-      feeEligible: true,
-      updatedAt: new Date('2026-05-11T12:00:00.000Z'),
-    };
-
+  it('does not allow either party to cancel an in_progress contract unilaterally', async () => {
     mockDb.query.contracts.findFirst.mockResolvedValueOnce(inProgressContract);
-    mockDb.update.mockReturnValueOnce(mockUpdateReturning(cancelled));
 
     const app = await buildApp();
     const response = await app.inject({
@@ -581,41 +589,211 @@ describe('Applications + Contracts Routes Integration', () => {
     });
     await app.close();
 
-    expect(response.statusCode).toBe(200);
-    expect(response.json().contract.status).toBe('cancelled');
-    expect(response.json().withinGrace).toBe(false);
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({ code: 'MUTUAL_CANCELLATION_REQUIRED' });
+    expect(mockDb.update).not.toHaveBeenCalled();
   });
 
-  it('cancellation within 24h of signing waives fees (grace period)', async () => {
-    const now = new Date();
-    const recentContract = {
-      ...inProgressContract,
-      // Both signed just 1 hour ago
-      posterSignedAt: new Date(now.getTime() - 60 * 60 * 1000),
-      workerSignedAt: new Date(now.getTime() - 60 * 60 * 1000),
+  it('creates a pending request without changing the active contract', async () => {
+    const request = {
+      id: '77777777-7777-7777-7777-777777777777',
+      contractId: inProgressContract.id,
+      requesterId: POSTER_ID,
+      recipientId: WORKER_ID,
+      reason: 'The timing no longer works',
+      status: 'pending',
+      createdAt: new Date('2026-05-11T12:00:00.000Z'),
+      resolvedAt: null,
     };
-    const cancelled = {
-      ...recentContract,
-      status: 'cancelled',
-      feeEligible: false,
-      cancelledAt: now,
-      updatedAt: now,
+    const requestValues = jest.fn().mockReturnValue({
+      returning: jest.fn().mockResolvedValue([request]),
+    });
+    const notificationValues = jest.fn().mockRejectedValue(new Error('notification store unavailable'));
+    const tx = {
+      select: jest.fn()
+        .mockReturnValueOnce(mockSelectRows([inProgressContract]))
+        .mockReturnValueOnce(mockSelectRows([])),
+      update: jest.fn(),
+      insert: jest.fn()
+        .mockReturnValueOnce({ values: requestValues }),
     };
-
-    mockDb.query.contracts.findFirst.mockResolvedValueOnce(recentContract);
-    mockDb.update.mockReturnValueOnce(mockUpdateReturning(cancelled));
+    mockDb.transaction.mockImplementationOnce(async (callback: (transaction: typeof tx) => Promise<unknown>) => callback(tx));
+    mockDb.insert.mockReturnValue({ values: notificationValues });
 
     const app = await buildApp();
     const response = await app.inject({
       method: 'POST',
-      url: `/api/v1/contracts/${recentContract.id}/cancel`,
+      url: `/api/v1/contracts/${inProgressContract.id}/cancellation-requests`,
+      headers: { authorization: `Bearer ${makeToken(POSTER_ID)}` },
+      payload: { reason: request.reason },
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json().cancellationRequest).toMatchObject({
+      status: 'pending',
+      requesterId: POSTER_ID,
+      recipientId: WORKER_ID,
+      reason: request.reason,
+    });
+    expect(tx.update).not.toHaveBeenCalled();
+    expect(notificationValues).toHaveBeenCalledTimes(2);
+    expect(notificationValues).toHaveBeenCalledWith(expect.arrayContaining([
+      expect.objectContaining({ recipientId: WORKER_ID, type: 'cancellation_requested' }),
+    ]));
+  });
+
+  it('accepts only the recipient response and cancels with no fee', async () => {
+    const request = {
+      id: '77777777-7777-7777-7777-777777777777',
+      contractId: inProgressContract.id,
+      requesterId: POSTER_ID,
+      recipientId: WORKER_ID,
+      reason: null,
+      status: 'pending',
+      createdAt: new Date('2026-05-11T11:00:00.000Z'),
+      resolvedAt: null,
+    };
+    const cancelled = {
+      ...inProgressContract,
+      status: 'cancelled',
+      cancelledAt: new Date('2026-05-11T12:00:00.000Z'),
+      feeEligible: false,
+    };
+    const accepted = { ...request, status: 'accepted', respondedBy: WORKER_ID, resolvedAt: cancelled.cancelledAt };
+    const notificationValues = jest.fn().mockResolvedValue(undefined);
+    mockDb.insert.mockReturnValue({ values: notificationValues });
+    const tx = {
+      select: jest.fn()
+        .mockReturnValueOnce(mockSelectRows([inProgressContract]))
+        .mockReturnValueOnce(mockSelectRows([request])),
+      update: jest.fn()
+        .mockReturnValueOnce(mockTransactionUpdateReturning(cancelled))
+        .mockReturnValueOnce({ set: jest.fn().mockReturnValue({ where: jest.fn().mockResolvedValue(undefined) }) })
+        .mockReturnValueOnce(mockTransactionUpdateReturning(accepted)),
+      insert: jest.fn().mockReturnValueOnce({ values: notificationValues }),
+    };
+    mockDb.transaction.mockImplementationOnce(async (callback: (transaction: typeof tx) => Promise<unknown>) => callback(tx));
+
+    const app = await buildApp();
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/v1/contracts/${inProgressContract.id}/cancellation-requests/${request.id}/accept`,
       headers: { authorization: `Bearer ${makeToken(WORKER_ID)}` },
     });
     await app.close();
 
     expect(response.statusCode).toBe(200);
-    expect(response.json().withinGrace).toBe(true);
-    expect(response.json().contract.feeEligible).toBe(false);
+    expect(response.json().contract).toMatchObject({ status: 'cancelled', feeEligible: false });
+    expect(response.json().cancellationRequest.status).toBe('accepted');
+    expect(notificationValues).toHaveBeenCalledWith(expect.arrayContaining([
+      expect.objectContaining({ recipientId: POSTER_ID, type: 'cancellation_accepted' }),
+      expect.objectContaining({ recipientId: WORKER_ID, type: 'cancellation_accepted' }),
+    ]));
+  });
+
+  it('declining a request keeps the contract active and leaves fee eligibility unchanged', async () => {
+    const request = {
+      id: '77777777-7777-7777-7777-777777777777',
+      contractId: inProgressContract.id,
+      requesterId: POSTER_ID,
+      recipientId: WORKER_ID,
+      reason: null,
+      status: 'pending',
+      createdAt: new Date('2026-05-11T11:00:00.000Z'),
+      resolvedAt: null,
+    };
+    const declined = { ...request, status: 'declined', respondedBy: WORKER_ID };
+    const tx = {
+      select: jest.fn()
+        .mockReturnValueOnce(mockSelectRows([inProgressContract]))
+        .mockReturnValueOnce(mockSelectRows([request])),
+      update: jest.fn().mockReturnValueOnce(mockTransactionUpdateReturning(declined)),
+      insert: jest.fn(),
+    };
+    mockDb.transaction.mockImplementationOnce(async (callback: (transaction: typeof tx) => Promise<unknown>) => callback(tx));
+    const notificationValues = jest.fn().mockResolvedValue(undefined);
+    mockDb.insert.mockReturnValue({ values: notificationValues });
+
+    const app = await buildApp();
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/v1/contracts/${inProgressContract.id}/cancellation-requests/${request.id}/decline`,
+      headers: { authorization: `Bearer ${makeToken(WORKER_ID)}` },
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().cancellationRequest.status).toBe('declined');
+    expect(tx.update).toHaveBeenCalledTimes(1);
+    expect(notificationValues).toHaveBeenCalledWith(expect.arrayContaining([
+      expect.objectContaining({ recipientId: POSTER_ID, type: 'cancellation_declined' }),
+      expect.objectContaining({ recipientId: WORKER_ID, type: 'cancellation_declined' }),
+    ]));
+  });
+
+  it('withdrawal closes only the requester’s pending request', async () => {
+    const request = {
+      id: '77777777-7777-7777-7777-777777777777',
+      contractId: inProgressContract.id,
+      requesterId: POSTER_ID,
+      recipientId: WORKER_ID,
+      reason: null,
+      status: 'pending',
+      createdAt: new Date('2026-05-11T11:00:00.000Z'),
+      resolvedAt: null,
+    };
+    const withdrawn = { ...request, status: 'withdrawn', respondedBy: POSTER_ID };
+    const tx = {
+      select: jest.fn()
+        .mockReturnValueOnce(mockSelectRows([inProgressContract]))
+        .mockReturnValueOnce(mockSelectRows([request])),
+      update: jest.fn().mockReturnValueOnce(mockTransactionUpdateReturning(withdrawn)),
+      insert: jest.fn(),
+    };
+    mockDb.transaction.mockImplementationOnce(async (callback: (transaction: typeof tx) => Promise<unknown>) => callback(tx));
+    mockDb.insert.mockReturnValue({ values: jest.fn().mockResolvedValue(undefined) });
+
+    const app = await buildApp();
+    const response = await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/contracts/${inProgressContract.id}/cancellation-requests/${request.id}`,
+      headers: { authorization: `Bearer ${makeToken(POSTER_ID)}` },
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().cancellationRequest.status).toBe('withdrawn');
+    expect(tx.update).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not let the requester respond for the recipient', async () => {
+    const request = {
+      id: '77777777-7777-7777-7777-777777777777',
+      contractId: inProgressContract.id,
+      requesterId: POSTER_ID,
+      recipientId: WORKER_ID,
+      status: 'pending',
+    };
+    const tx = {
+      select: jest.fn()
+        .mockReturnValueOnce(mockSelectRows([inProgressContract]))
+        .mockReturnValueOnce(mockSelectRows([request])),
+      update: jest.fn(),
+      insert: jest.fn(),
+    };
+    mockDb.transaction.mockImplementationOnce(async (callback: (transaction: typeof tx) => Promise<unknown>) => callback(tx));
+
+    const app = await buildApp();
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/v1/contracts/${inProgressContract.id}/cancellation-requests/${request.id}/accept`,
+      headers: { authorization: `Bearer ${makeToken(POSTER_ID)}` },
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(403);
+    expect(tx.update).not.toHaveBeenCalled();
   });
 
   it('blocks cancellation from non-parties', async () => {
@@ -687,6 +865,36 @@ describe('Applications + Contracts Routes Integration', () => {
     expect(response.statusCode).toBe(200);
     expect(response.json().quitNoFee).toBe(true);
     expect(response.json().contract.feeEligible).toBe(false);
+  });
+
+  it('starts the worker-quit grace period when the second party signs', async () => {
+    const now = new Date();
+    const recentlyActivated = {
+      ...inProgressContract,
+      workerSignedAt: new Date(now.getTime() - 48 * 60 * 60 * 1000),
+      posterSignedAt: new Date(now.getTime() - 30 * 60 * 1000),
+    };
+    const quit = {
+      ...recentlyActivated,
+      status: 'quit',
+      quitAt: now,
+      feeEligible: false,
+      updatedAt: now,
+    };
+
+    mockDb.query.contracts.findFirst.mockResolvedValueOnce(recentlyActivated);
+    mockDb.update.mockReturnValueOnce(mockUpdateReturning(quit));
+
+    const app = await buildApp();
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/v1/contracts/${recentlyActivated.id}/quit`,
+      headers: { authorization: `Bearer ${makeToken(WORKER_ID)}` },
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().quitNoFee).toBe(true);
   });
 
   it('poster cannot quit a contract (worker only)', async () => {

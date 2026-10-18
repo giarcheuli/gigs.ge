@@ -6,7 +6,10 @@ import {
   integer,
   boolean,
   timestamp,
+  uniqueIndex,
+  index,
 } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 import { users } from './users';
 import { gigs } from './gigs';
 import { applications } from './applications';
@@ -37,6 +40,24 @@ export const contracts = pgTable('contracts', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const contractCancellationRequests = pgTable('contract_cancellation_requests', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  contractId: uuid('contract_id').notNull().references(() => contracts.id, { onDelete: 'cascade' }),
+  requesterId: uuid('requester_id').notNull().references(() => users.id),
+  recipientId: uuid('recipient_id').notNull().references(() => users.id),
+  reason: text('reason'),
+  status: text('status').notNull().default('pending'),
+  respondedBy: uuid('responded_by').references(() => users.id),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+}, (table) => ({
+  onePendingPerContract: uniqueIndex('contract_cancellation_requests_one_pending_idx')
+    .on(table.contractId)
+    .where(sql`${table.status} = 'pending'`),
+  contractStatusIdx: index('contract_cancellation_requests_contract_status_idx')
+    .on(table.contractId, table.status),
+}));
 
 export const contractAppendices = pgTable('contract_appendices', {
   id: uuid('id').primaryKey().defaultRandom(),

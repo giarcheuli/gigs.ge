@@ -97,6 +97,11 @@ export const NOTIFICATION_TYPES = [
   'GIG_FLAGGED',
   'NEW_MESSAGE',
   'WORKER_QUIT',
+  'cancellation_requested',
+  'cancellation_accepted',
+  'cancellation_declined',
+  'cancellation_withdrawn',
+  'cancellation_superseded',
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
