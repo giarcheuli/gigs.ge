@@ -3,7 +3,7 @@
     "updatedAt": "2026-10-14",
     "goal": "Complete the trust-critical marketplace flows and make business rules configurable before public soft launch.",
     "repoState": "development_active",
-    "summary": "Dev and UAT Cloud Run environments are live. Email verification is the only gate for posting/applying; phone verification is optional, and the change is deployed to dev (PR #17). Mutual cancellation now requires both parties' agreement, with worker quit and poster disputes kept separate; this is deployed to dev (PR #19). Production email delivery is still required before public sign-up. Remaining gaps include server-side privacy enforcement, contract timers, evidence/arbitration, billing, admin operations, and uploads. Configurable settings backend work remains unmerged on feat/configurable-contract-settings. Guides/FAQ are postponed; fixed-price only remains initial scope and range/negotiable contracts are pinned for early post-release."
+    "summary": "Dev and UAT Cloud Run environments are live. Email-only access (PR #17), mutual cancellation (PR #19), and server-side gig visibility enforcement (PR #21) are deployed to dev. Live public API check found no restricted gig values in the tested response; six health checks passed. Production email delivery remains required before public signup. Remaining gaps include contract timers, evidence/arbitration, billing, admin operations, and uploads. Configurable-settings backend work remains unmerged on feat/configurable-contract-settings. Guides/FAQ are postponed; fixed-price only remains initial scope and range/negotiable contracts are pinned for early post-release."
   },
   "milestones": [
     {
@@ -186,8 +186,10 @@
     {
       "task": "Enforce contact-info and field visibility rules server-side in API responses (visContact etc. exist in schema but are not enforced).",
       "priority": "high",
-      "status": "not_started",
-      "phase": "m2_deal_lifecycle"
+      "status": "done",
+      "phase": "m2_deal_lifecycle",
+      "completedAt": "2026-10-18",
+      "notes": "Implemented and deployed to dev in PR #21. Board, detail, application-history, and contract-detail responses use a shared visibility projection; public response test found no restricted values. Requirements: docs/specs/feat-server-gig-visibility.md."
     },
     {
       "task": "Build minimal admin app: admin login, platform settings editor, dispute queue with arbiter resolution UI.",
