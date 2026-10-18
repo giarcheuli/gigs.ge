@@ -1,6 +1,6 @@
 # Architecture: Authentication Flow
 
-> **Status:** Design complete — implementation next.
+> **Status:** Authentication email delivery uses Resend; SMS remains optional and unavailable.
 
 ## Overview
 
@@ -22,13 +22,13 @@ sequenceDiagram
     participant U as User
     participant API as /auth/register
     participant DB as PostgreSQL
-    participant Mail as Email Service
+    participant Mail as Resend
 
     U->>API: POST { email, phone, password, dateOfBirth }
     API->>API: Validate (Zod schema)
     API->>API: Hash password (bcrypt, cost=12)
     API->>DB: INSERT users + user_profiles
-    API->>Mail: Send email verification OTC
+    API->>Mail: Send verification code
     API-->>U: 201 { user } + Set-Cookie (refresh)
 ```
 
@@ -69,15 +69,24 @@ Email verification is required for posting and applying. Phone verification is o
 
 | Channel | Method | Endpoint |
 |---------|--------|----------|
-| Email | 6-digit one-time code (OTC) | `POST /auth/verify/email` |
-| Phone | Optional 6-digit OTP if offered later | `POST /auth/verify/phone` |
+| Email | 6-digit one-time code | `POST /auth/verify-otp?channel=email` |
+| Phone | Optional; SMS delivery unavailable | Not available |
 
-Email OTCs are stored hashed in the `otp_codes` table with:
+Email verification codes and password-reset tokens are stored hashed in `otp_codes`, with separate purposes so the two credentials cannot be used interchangeably. Verification codes have:
+
 - Max 5 attempts before expiry
 - 15-minute TTL
 - 60-second cooldown on resend
 
-> **Launch dependency:** Production email delivery must work. SMS delivery is optional and is not a launch blocker.
+Verification and password-reset emails are sent from `noreply@gigs.ge` through Resend. The API key is supplied to Cloud Run from Google Secret Manager; it is never stored in source control or exposed to the browser. Local development can omit the key and use the explicitly development-only `_dev` code response. Provider failure never exposes a code or token in production.
+
+## Password Reset
+
+`POST /auth/forgot-password` always returns the same generic response to avoid revealing whether an email is registered. For an existing account, the API emails a single-use reset link that expires after 15 minutes. The token is placed in the URL fragment, stored only as a hash, and accepted only by the password-reset flow. The `/forgot-password` and `/reset-password` screens complete the user journey.
+
+## Delivery Behavior
+
+Registration creates the account and hashed verification code before attempting email delivery. If Resend cannot accept the email, registration remains successful and reports a safe delivery-failed state so the user can retry after the 60-second cooldown. The resend endpoint returns a stable temporary-unavailable response with retry timing. Password-reset requests retain their generic response even when delivery fails.
 
 ## Auth Guards
 
@@ -102,7 +111,7 @@ app.post('/gigs', {
 | Scope | Limit | Why |
 |-------|-------|-----|
 | Auth endpoints (`/auth/*`) | 10 req/min per IP | Brute-force protection |
-| OTP resend | 1 req/60s per user | Prevent SMS bombing |
+| OTP resend | 1 req/60s per user | Prevent verification-email abuse |
 | General API | 100 req/min per user | Fair use |
 
 ## Security Decisions

@@ -17,9 +17,15 @@ jest.mock('../db/index.js', () => ({
   },
 }));
 
+jest.mock('../lib/auth-email.js', () => ({
+  sendVerificationEmail: jest.fn().mockResolvedValue({ accepted: true, messageId: 'verification-1' }),
+  sendPasswordResetEmail: jest.fn().mockResolvedValue({ accepted: true, messageId: 'reset-1' }),
+}));
+
 import crypto from 'node:crypto';
 import { buildApp } from '../app.js';
 import { db } from '../db/index.js';
+import { sendPasswordResetEmail, sendVerificationEmail } from '../lib/auth-email.js';
 import { hashPassword, signAccessToken, signRefreshToken, hashToken } from '../lib/auth.js';
 
 type MockUser = {
@@ -145,6 +151,46 @@ describe('Auth Routes Integration', () => {
     );
     expect(otpInsert.values).toHaveBeenCalledWith(expect.objectContaining({ channel: 'email' }));
     expect(otpInsert.values).toHaveBeenCalledTimes(1);
+    expect(otpInsert.values).toHaveBeenCalledWith(expect.objectContaining({ purpose: 'email_verification' }));
+    expect(sendVerificationEmail).toHaveBeenCalledWith(newUser.email, expect.any(String));
+    expect(response.json().emailDeliveryStatus).toBe('accepted');
+  });
+
+  it('keeps registration successful but reports failed email delivery without exposing the code', async () => {
+    const newUser = makeUser();
+    mockDb.query.users.findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
+    mockDb.transaction.mockImplementation(async (callback: (tx: unknown) => Promise<unknown>) => {
+      const tx = {
+        insert: jest.fn()
+          .mockReturnValueOnce({
+            values: jest.fn().mockReturnValue({ returning: jest.fn().mockResolvedValue([newUser]) }),
+          })
+          .mockReturnValueOnce({ values: jest.fn().mockResolvedValue(undefined) }),
+      };
+      return callback(tx);
+    });
+    mockDb.insert.mockReturnValueOnce(mockInsertResult()).mockReturnValueOnce(mockInsertResult());
+    jest.mocked(sendVerificationEmail).mockResolvedValueOnce({ accepted: false, reason: 'provider_error' });
+
+    const app = await buildApp();
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/register',
+      payload: {
+        email: 'worker@example.com',
+        phone: '+995555123456',
+        password: 'Password123',
+        dateOfBirth: '1990-01-01',
+      },
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json()).toMatchObject({
+      emailDeliveryStatus: 'failed',
+      retryAfterSeconds: 60,
+    });
+    expect(response.json()).not.toHaveProperty('_dev');
   });
 
   it('rejects underage registration before touching the database', async () => {
@@ -556,6 +602,7 @@ describe('Auth Routes Integration — resend-otp', () => {
     jest.clearAllMocks();
     mockDb.insert.mockReset();
     mockDb.query.otpCodes.findFirst.mockReset();
+    mockDb.query.users.findFirst.mockReset();
   });
 
   const authHeaders = () => ({ authorization: `Bearer ${makeAccessToken()}` });
@@ -596,6 +643,7 @@ describe('Auth Routes Integration — resend-otp', () => {
 
   it('creates an email code when no recent code exists', async () => {
     mockDb.query.otpCodes.findFirst.mockResolvedValueOnce(null);
+    mockDb.query.users.findFirst.mockResolvedValueOnce(makeUser());
     const insertResult = mockInsertResult();
     mockDb.insert.mockReturnValueOnce(insertResult);
 
@@ -608,11 +656,35 @@ describe('Auth Routes Integration — resend-otp', () => {
     await app.close();
 
     expect(response.statusCode).toBe(200);
-    expect(response.json().message).toBe('Verification code sent via email');
+    expect(response.json().message).toBe('Verification email accepted for delivery');
     expect(insertResult.values).toHaveBeenCalledWith(expect.objectContaining({
       userId: TEST_USER_ID,
       channel: 'email',
+      purpose: 'email_verification',
     }));
+    expect(sendVerificationEmail).toHaveBeenCalledWith('worker@example.com', expect.any(String));
+  });
+
+  it('returns a safe retry response when email delivery fails', async () => {
+    mockDb.query.otpCodes.findFirst.mockResolvedValueOnce(null);
+    mockDb.query.users.findFirst.mockResolvedValueOnce(makeUser());
+    mockDb.insert.mockReturnValueOnce(mockInsertResult());
+    jest.mocked(sendVerificationEmail).mockResolvedValueOnce({ accepted: false, reason: 'provider_error' });
+
+    const app = await buildApp();
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/resend-otp?channel=email',
+      headers: authHeaders(),
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toMatchObject({
+      code: 'EMAIL_DELIVERY_UNAVAILABLE',
+      retryAfterSeconds: 60,
+    });
+    expect(response.json()).not.toHaveProperty('_dev');
   });
 });
 
@@ -648,7 +720,8 @@ describe('Auth Routes Integration — forgot-password', () => {
 
   it('stores a reset token when the email is registered', async () => {
     mockDb.query.users.findFirst.mockResolvedValueOnce(makeUser());
-    mockDb.insert.mockReturnValueOnce(mockInsertResult());
+    const insertResult = mockInsertResult();
+    mockDb.insert.mockReturnValueOnce(insertResult);
 
     const app = await buildApp();
     const response = await app.inject({
@@ -663,6 +736,30 @@ describe('Auth Routes Integration — forgot-password', () => {
       message: 'If that email exists, a reset link has been sent.',
     });
     expect(mockDb.insert).toHaveBeenCalledTimes(1);
+    expect(sendPasswordResetEmail).toHaveBeenCalledWith(
+      'worker@example.com',
+      expect.stringContaining('#token='),
+    );
+    expect(insertResult.values).toHaveBeenCalledWith(expect.objectContaining({ purpose: 'password_reset' }));
+  });
+
+  it('keeps the generic response when reset email delivery fails', async () => {
+    mockDb.query.users.findFirst.mockResolvedValueOnce(makeUser());
+    mockDb.insert.mockReturnValueOnce(mockInsertResult());
+    jest.mocked(sendPasswordResetEmail).mockResolvedValueOnce({ accepted: false, reason: 'provider_error' });
+
+    const app = await buildApp();
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/forgot-password',
+      payload: { email: 'worker@example.com' },
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      message: 'If that email exists, a reset link has been sent.',
+    });
   });
 });
 

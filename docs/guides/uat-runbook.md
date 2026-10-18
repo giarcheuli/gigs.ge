@@ -43,7 +43,7 @@ JWT_ACCESS_SECRET=any-random-string-32-chars-minimum
 JWT_REFRESH_SECRET=another-random-string-32-chars-min
 ```
 
-Everything else can stay as the example defaults for local UAT. R2 and Resend keys are optional — the API runs without them (file uploads and real email are skipped; OTP codes appear in the server console log as `_dev.code`).
+Everything else can stay as the example defaults for local development. Without `RESEND_API_KEY`, local development uses the explicitly development-only `_dev` code/token response. Real email delivery requires a verified Resend domain and API key. Never use `_dev` codes in a deployed environment.
 
 ### Web (`apps/web/.env.local`)
 
@@ -67,6 +67,8 @@ and **https://api.uat.gigs.ge** (API). DNS is hosted on Cloudflare (records must
 the underlying Cloud Run URLs (gigsge-web/gigsge-api …run.app) keep working as fallbacks.
 
 The web auth screens (`/login`, `/register`, `/verify`) and shared API helper use a production safeguard: if `_API_URL` is missing or points to localhost, they fall back to the hosted API URL above so authentication does not break in UAT.
+
+For deployed email delivery, create a Secret Manager secret for each environment (for example, `resend-api-key-dev` and `resend-api-key-uat`) and store that environment's Resend sending key there. Grant `roles/secretmanager.secretAccessor` to the Cloud Run API service's runtime service account. Set the matching Cloud Build trigger substitution `_RESEND_API_SECRET` to the secret name; Cloud Build binds the secret to `RESEND_API_KEY` at runtime. Do not put the key in trigger substitutions, source files, or build arguments.
 
 ---
 
@@ -222,15 +224,13 @@ To test price locking: open the gig in a private window **without logging in** �
 
 ---
 
-## 7. OTP codes in development
+## 7. Email verification and password reset
 
-Real email delivery requires a Resend API key (not set in local UAT). OTP codes are logged to the API server console:
+In local development without a Resend key, registration and resend responses include development-only codes. The web screens log those codes to the browser console. Password-reset responses similarly include a development-only token. These values are never returned by a deployed production-mode API.
 
-```
-_dev: { code: '123456' }
-```
+With the dev Secret Manager key configured, register a new account and confirm the verification message arrives from `noreply@gigs.ge`. Test resend cooldown, then use **Forgot your password?** on the sign-in page to request a reset link and complete the reset.
 
-Watch Terminal 1 (API) when triggering register/verify/resend.
+Resend acceptance means the provider queued the message; check the destination mailbox's spam folder if it does not appear.
 
 ---
 
@@ -255,4 +255,4 @@ These are intentional limitations, not bugs:
 - File uploads (avatars, gig images, dispute evidence) are not implemented — R2 integration is deferred
 - Admin dashboard is a placeholder — dispute arbiter UI does not exist yet
 - BullMQ background jobs (48h auto-complete, 14-day overdue auto-complete) are not running — timers require Redis workers started separately
-- Phone OTP verification is not wired to a real SMS provider — phone is stored but OTP channel is email-only in this slice
+- Phone verification is optional and SMS delivery is not configured

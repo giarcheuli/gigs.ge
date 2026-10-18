@@ -13,6 +13,7 @@ export const otpCodes = pgTable('otp_codes', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   channel: text('channel').notNull(), // 'email' | 'sms'
+  purpose: text('purpose').notNull().default('email_verification'),
   codeHash: text('code_hash').notNull(),
   attempts: integer('attempts').notNull().default(0),
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),

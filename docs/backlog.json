@@ -225,8 +225,9 @@
     {
       "task": "Integrate a production email provider for email verification and password reset (currently delivery is stubbed). Phone SMS is optional and not required for release.",
       "priority": "high",
-      "status": "not_started",
-      "phase": "m4_hardening"
+      "status": "in_progress",
+      "phase": "m4_hardening",
+      "notes": "Implementation is on feat/resend-email-delivery: Resend verification/resend/reset delivery, minimal password-reset screens, token-purpose separation, and Cloud Run Secret Manager binding. Dev deployment and real-mailbox verification remain blocked on provisioning the resend-api-key-dev secret and granting the API runtime service account access."
     },
     {
       "task": "Add end-to-end tests for user flows (e.g., gig poster creating a gig, worker applying, contract completion).",

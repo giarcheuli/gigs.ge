@@ -78,6 +78,7 @@ export default function RegisterPage() {
         user?: AuthUser;
         error?: string;
         field?: string;
+        emailDeliveryStatus?: 'accepted' | 'failed' | 'development_code';
         _dev?: { emailCode?: string };
       };
 
@@ -99,7 +100,7 @@ export default function RegisterPage() {
       if (body.accessToken && body.user) {
         setAccessToken(body.accessToken);
         login(body.accessToken, body.user);
-        router.push('/verify');
+        router.push(body.emailDeliveryStatus === 'failed' ? '/verify?delivery=failed' : '/verify');
       }
     } catch {
       setServerError('Network error. Please check your connection and try again.');

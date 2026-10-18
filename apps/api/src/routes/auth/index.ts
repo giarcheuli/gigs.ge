@@ -20,10 +20,13 @@ import {
 import type { AccessTokenPayload } from '../../lib/auth.js';
 import { requireAuth } from '../../middleware/guards.js';
 import { env } from '../../config/env.js';
+import { sendPasswordResetEmail, sendVerificationEmail } from '../../lib/auth-email.js';
 
 const OTP_EXPIRY_MS = 15 * 60 * 1000; // 15 minutes
 const OTP_RESEND_COOLDOWN_MS = 60 * 1000;
 const MAX_OTP_ATTEMPTS = 5;
+const EMAIL_VERIFICATION_PURPOSE = 'email_verification';
+const PASSWORD_RESET_PURPOSE = 'password_reset';
 
 export async function authRoutes(app: FastifyInstance) {
   // ── POST /register ──
@@ -74,9 +77,17 @@ export async function authRoutes(app: FastifyInstance) {
     await db.insert(otpCodes).values({
       userId: newUser.id,
       channel: 'email',
+      purpose: EMAIL_VERIFICATION_PURPOSE,
       codeHash: emailCodeHash,
       expiresAt,
     });
+
+    const emailResult = await sendVerificationEmail(newUser.email, emailCode);
+    if (emailResult.accepted) {
+      request.log.info({ event: 'auth_email_accepted', type: 'verification', messageId: emailResult.messageId });
+    } else {
+      request.log.error({ event: 'auth_email_delivery_failed', type: 'verification', reason: emailResult.reason });
+    }
 
     // Issue tokens
     const payload: AccessTokenPayload = {
@@ -119,6 +130,12 @@ export async function authRoutes(app: FastifyInstance) {
         emailVerified: newUser.emailVerified,
         phoneVerified: newUser.phoneVerified,
       },
+      emailDeliveryStatus: emailResult.accepted
+        ? 'accepted'
+        : env.NODE_ENV === 'development' ? 'development_code' : 'failed',
+      ...(!emailResult.accepted && env.NODE_ENV !== 'development' && {
+        retryAfterSeconds: OTP_RESEND_COOLDOWN_MS / 1000,
+      }),
       ...(devOtp && { _dev: devOtp }),
     });
   });
@@ -208,6 +225,7 @@ export async function authRoutes(app: FastifyInstance) {
       where: and(
         eq(otpCodes.userId, request.user.sub),
         eq(otpCodes.channel, channel),
+        eq(otpCodes.purpose, EMAIL_VERIFICATION_PURPOSE),
         isNull(otpCodes.usedAt),
         gt(otpCodes.expiresAt, new Date()),
       ),
@@ -269,6 +287,7 @@ export async function authRoutes(app: FastifyInstance) {
       where: and(
         eq(otpCodes.userId, request.user.sub),
         eq(otpCodes.channel, 'email'),
+        eq(otpCodes.purpose, EMAIL_VERIFICATION_PURPOSE),
         gt(otpCodes.createdAt, new Date(Date.now() - OTP_RESEND_COOLDOWN_MS)),
       ),
       orderBy: (otpCodes, { desc }) => [desc(otpCodes.createdAt)],
@@ -286,6 +305,21 @@ export async function authRoutes(app: FastifyInstance) {
       });
     }
 
+    const user = await db.query.users.findFirst({
+      where: eq(users.id, request.user.sub),
+      columns: { email: true, emailVerified: true },
+    });
+    if (!user) {
+      return reply.status(401).send({ error: 'Account unavailable', statusCode: 401 });
+    }
+    if (user.emailVerified) {
+      return reply.status(409).send({
+        error: 'Email is already verified',
+        code: 'EMAIL_ALREADY_VERIFIED',
+        statusCode: 409,
+      });
+    }
+
     const code = generateOtp();
     const codeHash = await hashOtp(code);
     const expiresAt = new Date(Date.now() + OTP_EXPIRY_MS);
@@ -293,15 +327,30 @@ export async function authRoutes(app: FastifyInstance) {
     await db.insert(otpCodes).values({
       userId: request.user.sub,
       channel,
+      purpose: EMAIL_VERIFICATION_PURPOSE,
       codeHash,
       expiresAt,
     });
 
-    // TODO: Send actual verification email in production.
+    const emailResult = await sendVerificationEmail(user.email, code);
     const devOtp = env.NODE_ENV === 'development' ? { code } : undefined;
 
+    if (!emailResult.accepted && env.NODE_ENV !== 'development') {
+      request.log.error({ event: 'auth_email_delivery_failed', type: 'verification', reason: emailResult.reason });
+      return reply.status(503).send({
+        error: 'Verification email is temporarily unavailable. Please try again later.',
+        code: 'EMAIL_DELIVERY_UNAVAILABLE',
+        retryAfterSeconds: OTP_RESEND_COOLDOWN_MS / 1000,
+        statusCode: 503,
+      });
+    }
+    if (emailResult.accepted) {
+      request.log.info({ event: 'auth_email_accepted', type: 'verification', messageId: emailResult.messageId });
+    }
+
     return reply.send({
-      message: 'Verification code sent via email',
+      message: emailResult.accepted ? 'Verification email accepted for delivery' : 'Verification code available in development',
+      emailDeliveryStatus: emailResult.accepted ? 'accepted' : 'development_code',
       ...(devOtp && { _dev: devOtp }),
     });
   });
@@ -419,11 +468,20 @@ export async function authRoutes(app: FastifyInstance) {
     await db.insert(otpCodes).values({
       userId: user.id,
       channel: 'email',
+      purpose: PASSWORD_RESET_PURPOSE,
       codeHash: tokenHash,
       expiresAt,
     });
 
-    // TODO: Send actual reset email with link containing resetToken
+    const resetUrl = new URL('/reset-password', env.FRONTEND_URL);
+    resetUrl.hash = new URLSearchParams({ token: resetToken }).toString();
+    const emailResult = await sendPasswordResetEmail(user.email, resetUrl.toString());
+    if (!emailResult.accepted) {
+      request.log.error({ event: 'auth_email_delivery_failed', type: 'password_reset', reason: emailResult.reason });
+    } else {
+      request.log.info({ event: 'auth_email_accepted', type: 'password_reset', messageId: emailResult.messageId });
+    }
+
     const devToken = env.NODE_ENV === 'development' ? { resetToken } : undefined;
 
     return reply.send({
@@ -443,6 +501,7 @@ export async function authRoutes(app: FastifyInstance) {
       where: and(
         eq(otpCodes.codeHash, tokenHash),
         eq(otpCodes.channel, 'email'),
+        eq(otpCodes.purpose, PASSWORD_RESET_PURPOSE),
         isNull(otpCodes.usedAt),
         gt(otpCodes.expiresAt, new Date()),
       ),
