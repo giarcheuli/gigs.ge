@@ -6,6 +6,7 @@ import { applications, contractCancellationRequests, contracts, notifications } 
 import { users } from '../../db/schema/users.js';
 import { requireAuth } from '../../middleware/guards.js';
 import { loadGigVisibilityContext, presentGig } from '../../lib/gig-visibility.js';
+import { getPlatformSettings } from '../../lib/platform-settings.js';
 
 const contractIdParamsSchema = z.object({ id: z.string().uuid() });
 const cancellationRequestParamsSchema = z.object({ id: z.string().uuid(), requestId: z.string().uuid() });
@@ -141,6 +142,9 @@ export async function contractsRoutes(app: FastifyInstance) {
     const now = new Date();
     const posterIsSigned = Boolean(contract.posterSignedAt || isPoster);
     const workerIsSigned = Boolean(contract.workerSignedAt || isWorker);
+    const policySnapshot = contract.status === 'draft' && posterIsSigned && workerIsSigned
+      ? await getPlatformSettings()
+      : null;
 
     const [updatedContract] = await db
       .update(contracts)
@@ -148,6 +152,15 @@ export async function contractsRoutes(app: FastifyInstance) {
         ...(isPoster && !contract.posterSignedAt && { posterSignedAt: now }),
         ...(isWorker && !contract.workerSignedAt && { workerSignedAt: now }),
         ...(posterIsSigned && workerIsSigned && { status: 'in_progress' }),
+        ...(policySnapshot && {
+          posterFeePercentSnapshot: policySnapshot.posterFeePercent.toFixed(2),
+          workerFeePercentSnapshot: policySnapshot.workerFeePercent.toFixed(2),
+          cancelGraceHoursSnapshot: policySnapshot.cancelGraceHours,
+          completionResponseHoursSnapshot: policySnapshot.completionResponseHours,
+          overdueAutoCompleteDaysSnapshot: policySnapshot.overdueAutoCompleteDays,
+          disputeArbiterUnlockHoursSnapshot: policySnapshot.disputeArbiterUnlockHours,
+          disputeAutoResolveDaysSnapshot: policySnapshot.disputeAutoResolveDays,
+        }),
         updatedAt: now,
       })
       .where(eq(contracts.id, params.id))
@@ -476,7 +489,7 @@ export async function contractsRoutes(app: FastifyInstance) {
 
   // ── POST /:id/quit ─────────────────────────────────────────────────────────
   // Worker only, from in_progress → quit.
-  // If < 24h since signing: no fee (feeEligible = false).
+  // If within the saved grace window: no fee (feeEligible = false).
   app.post('/:id/quit', { preHandler: [requireAuth] }, async (request, reply) => {
     const params = contractIdParamsSchema.parse(request.params);
 
@@ -500,7 +513,8 @@ export async function contractsRoutes(app: FastifyInstance) {
     const signedAt = contract.posterSignedAt && contract.workerSignedAt
       ? new Date(Math.max(contract.posterSignedAt.getTime(), contract.workerSignedAt.getTime()))
       : contract.workerSignedAt ?? contract.posterSignedAt;
-    const quitNoFee = signedAt !== null && Date.now() - signedAt.getTime() < 24 * 60 * 60 * 1000;
+    const gracePeriodMs = contract.cancelGraceHoursSnapshot * 60 * 60 * 1000;
+    const quitNoFee = signedAt !== null && Date.now() - signedAt.getTime() < gracePeriodMs;
 
     const now = new Date();
     const [updated] = await db
