@@ -44,6 +44,9 @@ export const gigImages = pgTable('gig_images', {
   id: uuid('id').primaryKey().defaultRandom(),
   gigId: uuid('gig_id').notNull().references(() => gigs.id, { onDelete: 'cascade' }),
   url: text('url').notNull(),
+  thumbUrl: text('thumb_url'),
+  // Object name prefix in the media bucket; '<key>.webp' and '<key>-thumb.webp' are stored.
+  storageKey: text('storage_key'),
   isPreview: boolean('is_preview').notNull().default(false),
   sortOrder: integer('sort_order').notNull().default(0),
   uploadedAt: timestamp('uploaded_at', { withTimezone: true }).notNull().defaultNow(),

@@ -97,7 +97,7 @@ Create the dedicated API runtime accounts `gigsge-api-dev-runtime@gigsge.iam.gse
 
 **Temporary shared Resend key:** `resend-api-key-uat` currently holds a copy of the dev key, because the dev key is send-only and cannot create new keys. To separate them, create a sending-access key for `gigs.ge` in Resend and add it as a new version of `resend-api-key-uat`. The next UAT deploy picks it up (`:latest`).
 
-Set trigger substitutions independently. Dev uses `_DB_INSTANCE=gigsge-dev-db`, `_DB_NAME=gigsge_dev`, `_DB_USER=gigsge_dev_app`, `_DB_PASSWORD_SECRET=db-password-dev`, `_JWT_ACCESS_SECRET_NAME=jwt-access-secret-dev`, `_JWT_REFRESH_SECRET_NAME=jwt-refresh-secret-dev`, `_RESEND_API_SECRET=resend-api-key-dev`, `_AUTH_EMAIL_QUEUE=auth-email-dev`, and `_API_RUNTIME_SERVICE_ACCOUNT=gigsge-api-dev-runtime@gigsge.iam.gserviceaccount.com`. UAT uses `_DB_INSTANCE=gigsge-uat-db`, `_DB_NAME=gigsge`, `_DB_USER=postgres`, and the `-uat` secrets, `auth-email-uat` queue, and `gigsge-api-uat-runtime@gigsge.iam.gserviceaccount.com` identity. Keep the existing API/frontend URL substitutions for each environment.
+Set trigger substitutions independently. Dev uses `_DB_INSTANCE=gigsge-dev-db`, `_DB_NAME=gigsge_dev`, `_DB_USER=gigsge_dev_app`, `_DB_PASSWORD_SECRET=db-password-dev`, `_JWT_ACCESS_SECRET_NAME=jwt-access-secret-dev`, `_JWT_REFRESH_SECRET_NAME=jwt-refresh-secret-dev`, `_RESEND_API_SECRET=resend-api-key-dev`, `_AUTH_EMAIL_QUEUE=auth-email-dev`, `_MEDIA_BUCKET=gigsge-dev-media`, and `_API_RUNTIME_SERVICE_ACCOUNT=gigsge-api-dev-runtime@gigsge.iam.gserviceaccount.com`. UAT uses `_DB_INSTANCE=gigsge-uat-db`, `_DB_NAME=gigsge`, `_DB_USER=postgres`, and the `-uat` secrets, `auth-email-uat` queue, `gigsge-uat-media` bucket, and `gigsge-api-uat-runtime@gigsge.iam.gserviceaccount.com` identity. Keep the existing API/frontend URL substitutions for each environment.
 
 Remove the old `_DB_PASSWORD`, `_JWT_ACCESS_SECRET`, and `_JWT_REFRESH_SECRET` substitutions after the new Secret Manager versions are configured. Their values are no longer used and should not remain in the trigger.
 
@@ -110,7 +110,7 @@ Set these values explicitly in each trigger; Cloud Build now rejects missing val
 | Dev | `gigsge-api-dev` | `gigsge-web-dev` | `gigsge_dev` | `gigsge_dev_app` | `gigsge-dev-db` |
 | UAT | `gigsge-api` | `gigsge-web` | `gigsge` | `postgres` | `gigsge-uat-db` |
 
-Also set `_API_RUNTIME_SERVICE_ACCOUNT`, `_DB_PASSWORD_SECRET`, `_JWT_ACCESS_SECRET_NAME`, `_JWT_REFRESH_SECRET_NAME`, `_RESEND_API_SECRET`, `_AUTH_EMAIL_QUEUE`, `_API_URL`, and `_FRONTEND_URL` to the matching environment values. Dev and UAT use separate SQL instances, DB users, and credentials.
+Also set `_API_RUNTIME_SERVICE_ACCOUNT`, `_DB_PASSWORD_SECRET`, `_JWT_ACCESS_SECRET_NAME`, `_JWT_REFRESH_SECRET_NAME`, `_RESEND_API_SECRET`, `_AUTH_EMAIL_QUEUE`, `_MEDIA_BUCKET`, `_API_URL`, and `_FRONTEND_URL` to the matching environment values. Dev and UAT use separate SQL instances, DB users, and credentials.
 
 Create the database, run migrations, and seed UAT accounts:
 

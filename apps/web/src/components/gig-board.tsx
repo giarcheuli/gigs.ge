@@ -23,11 +23,19 @@ interface Region extends Place {
   cities: Place[];
 }
 
+export interface GigImage {
+  id: string;
+  url: string;
+  thumbUrl: string;
+  isPreview: boolean;
+}
+
 export interface BoardGig {
   id: string;
   title?: string | null;
   shortDescription: string;
   workersNeeded?: number;
+  images?: GigImage[];
   regionId: number;
   region?: Place | null;
   city?: Place | null;
@@ -288,8 +296,18 @@ export function GigBoard() {
               <Link
                 key={gig.id}
                 href={user ? `/gigs/${gig.id}` : `/login?next=${encodeURIComponent(`/gigs/${gig.id}`)}`}
-                className="block bg-white rounded-xl p-5 border border-gray-100 hover:border-brand-200 hover:shadow-sm transition-all"
+                className="flex gap-4 bg-white rounded-xl p-5 border border-gray-100 hover:border-brand-200 hover:shadow-sm transition-all"
               >
+                {gig.images?.[0] && (
+                  // eslint-disable-next-line @next/next/no-img-element -- public bucket URL, already resized server-side
+                  <img
+                    src={gig.images[0].thumbUrl}
+                    alt=""
+                    loading="lazy"
+                    className="h-20 w-20 shrink-0 rounded-lg object-cover bg-gray-100"
+                  />
+                )}
+                <div className="min-w-0 flex-1">
                 <div className="flex items-start justify-between gap-2">
                   <p className="font-semibold text-gray-900 line-clamp-1">{gig.title ?? gig.shortDescription}</p>
                   {appliedGigIds.has(gig.id) && (
@@ -306,6 +324,7 @@ export function GigBoard() {
                   <span className="font-medium text-brand-700">{priceLabel(gig)}</span>
                   {(gig.workersNeeded ?? 1) > 1 && <span>👥 {gig.workersNeeded} workers</span>}
                   <span className="ml-auto text-xs">{expiryLabel(gig.expiresAt)}</span>
+                </div>
                 </div>
               </Link>
             ))}

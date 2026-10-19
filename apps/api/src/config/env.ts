@@ -41,11 +41,8 @@ export const env = {
   JWT_ACCESS_EXPIRES_IN: process.env.JWT_ACCESS_EXPIRES_IN ?? '15m',
   JWT_REFRESH_EXPIRES_IN: process.env.JWT_REFRESH_EXPIRES_IN ?? '7d',
 
-  R2_ACCOUNT_ID: process.env.R2_ACCOUNT_ID ?? '',
-  R2_ACCESS_KEY_ID: process.env.R2_ACCESS_KEY_ID ?? '',
-  R2_SECRET_ACCESS_KEY: process.env.R2_SECRET_ACCESS_KEY ?? '',
-  R2_BUCKET_NAME: process.env.R2_BUCKET_NAME ?? 'gigs-ge-dev',
-  R2_PUBLIC_URL: process.env.R2_PUBLIC_URL ?? '',
+  // Google Cloud Storage bucket for gig photos; uploads return 503 when unset (local dev).
+  MEDIA_BUCKET: process.env.MEDIA_BUCKET ?? '',
 
   RESEND_API_KEY: process.env.RESEND_API_KEY ?? '',
   EMAIL_FROM: process.env.EMAIL_FROM ?? 'noreply@gigs.ge',

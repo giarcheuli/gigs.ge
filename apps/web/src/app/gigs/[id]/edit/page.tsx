@@ -362,7 +362,7 @@ export default function EditGigPage() {
 }
 
 const VIS_FIELD_CONFIG = [
-  { key: 'visImages', label: 'Images' },
+  { key: 'visImages', label: 'Extra photos (cover is public)' },
   { key: 'visAddress', label: 'Street address' },
   { key: 'visContact', label: 'Contact info' },
   { key: 'visDates', label: 'Available dates' },

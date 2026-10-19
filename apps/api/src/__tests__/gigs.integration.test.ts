@@ -297,7 +297,7 @@ describe('Gigs Routes Integration', () => {
     expect(listed).not.toHaveProperty('visPrice');
     expect(listed).not.toHaveProperty('visCity');
     expect(mockDb.query.gigs.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      with: { region: true, city: true },
+      with: expect.objectContaining({ region: true, city: true, images: expect.objectContaining({ limit: 1 }) }),
     }));
 
     expect(anonymousDetail.statusCode).toBe(401);
