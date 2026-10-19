@@ -1,6 +1,6 @@
-# UAT Runbook — gigs.ge First Slice
+# UAT Runbook — gigs.ge
 
-This document is the single source of truth for setting up and running the first-slice stakeholder UAT. Follow these steps exactly, in order.
+Setup history and step-by-step checks for the dev and UAT environments. The current cloud layout (names, identities, secrets) is summarized in [operations/cloud-inventory.md](../operations/cloud-inventory.md); this runbook records how it was built and how to verify it.
 
 ---
 

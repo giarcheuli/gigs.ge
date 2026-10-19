@@ -12,22 +12,19 @@ description: "Documentation conventions for gigs.ge. Use when: writing or updati
 4. **Cross-Linked**: Always link to related docs. Never leave a concept orphaned.
 
 ## Directory Structure
+The live index is [docs/README.md](../../../docs/README.md). Folders:
 ```
 docs/
-├── STRATEGY.md                 # This file — documentation meta-rules
-├── architecture/               # System-level design decisions
-│   ├── monorepo-structure.md
-│   ├── database-design.md
-│   ├── auth-flow.md
-│   ├── deal-lifecycle.md
-│   ├── billing-model.md
-│   └── visibility-model.md
-└── guides/                     # Feature-specific how-tos
-    ├── getting-started.md
-    ├── posting-a-gig.md
-    ├── applying-for-a-gig.md
-    ├── dispute-resolution.md
-    └── invoice-management.md
+├── README.md        # Index: where every doc lives and where new ones go
+├── STRATEGY.md      # Documentation meta-rules
+├── backlog.json     # Backlog of record
+├── architecture/    # Design decisions and how parts fit together
+├── guides/          # How to do a task (setup, branching, UAT, agents)
+├── operations/      # Live cloud resources and operating procedures
+├── specs/           # One spec per feature slice: feat-<name>.md
+├── planning/        # Ordered next steps (improvement-plan.md)
+├── status/          # Dated snapshots: YYYY-MM-DD-<topic>.md
+└── archive/         # No longer current; kept for context: YYYY-MM-DD-<name>.md
 ```
 
 ## Formatting Rules
