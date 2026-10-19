@@ -3,7 +3,7 @@
     "updatedAt": "2026-10-19",
     "goal": "Complete the trust-critical marketplace flows and make business rules configurable before public soft launch.",
     "repoState": "development_active",
-    "summary": "Dev and UAT Cloud Run environments are live. Email-only access (PR #17), mutual cancellation (PR #19), server-side gig visibility enforcement (PR #21), and production email delivery through Resend (PR #23) are deployed to dev. Live public API check found no restricted gig values in the tested response; six health checks passed. Real-mailbox verification and password-reset emails work on dev. Remaining gaps include contract timers, evidence/arbitration, billing, admin operations, and uploads. Configurable-settings backend work remains unmerged on feat/configurable-contract-settings. Guides/FAQ are postponed; fixed-price only remains initial scope and range/negotiable contracts are pinned for early post-release."
+    "summary": "Dev and UAT Cloud Run environments are live with separate Cloud SQL instances, per-environment secrets in Secret Manager, and per-environment runtime identities. Email-only access (PR #17), mutual cancellation (PR #19), server-side gig visibility (PR #21), and Resend email delivery (PR #23) are live on dev and UAT; real-mailbox verification and password reset work. Configurable platform settings backend (PR #26) is on dev and promoted with the 2026-10-19 docs update. Repo housekeeping on 2026-10-19 left only dev and main, no open PRs, and archived stale branches as archive/* tags. Remaining gaps: CI test gate, least-privilege deploy identity, UAT backups, contract timers, evidence/arbitration, admin app, billing, uploads, production environment. Ordered plan: docs/planning/improvement-plan.md. Guides/FAQ are postponed; fixed-price only remains initial scope."
   },
   "milestones": [
     {
@@ -22,7 +22,7 @@
     {
       "id": "M2",
       "name": "Deal lifecycle completion",
-      "status": "not_started",
+      "status": "in_progress",
       "exitCriteria": "Email-only eligibility rules are implemented; mutual cancellation request/consent flow is complete; configurable settings are editable by admins; lifecycle timers, dispute evidence/arbiter resolution, and server-side visibility rules work against documented policy snapshots; minimal admin operations are usable."
     },
     {
@@ -276,6 +276,62 @@
       "status": "not_started",
       "phase": "m4_hardening",
       "notes": "Discovered 2026-10-07: first real Cloud Run deploy of the API crashed with ERR_MODULE_NOT_FOUND; entrypoint.sh now starts via tsx as a workaround."
+    },
+    {
+      "task": "Add a GitHub Actions CI gate that builds shared/api/web and runs API tests on every PR to dev and main; make it a required check.",
+      "priority": "high",
+      "status": "not_started",
+      "phase": "m1_uat_round1",
+      "notes": "Audit 2026-10-19: no .github/workflows exists; PRs are checked only by GitGuardian, so a failing test does not block a merge. Improvement plan #1."
+    },
+    {
+      "task": "Enable daily automated backups (7-day retention) on the UAT Cloud SQL instance gigsge-uat-db.",
+      "priority": "high",
+      "status": "not_started",
+      "phase": "m1_uat_round1",
+      "notes": "Deletion protection enabled 2026-10-19; backups still off and need product-owner approval for the small cost. Improvement plan #2."
+    },
+    {
+      "task": "Replace the default compute service account (project Editor) used by deploy triggers and web services with dedicated least-privilege deployer and web-runtime identities; remove legacy project-wide roles from the unused Cloud Build account.",
+      "priority": "high",
+      "status": "not_started",
+      "phase": "m1_uat_round1",
+      "notes": "Improvement plan #3. See docs/operations/cloud-inventory.md."
+    },
+    {
+      "task": "In one Cloud SQL Studio session on gigsge-uat-db: drop leftover gigsge_dev database and gigsge_dev_app login, and move UAT tables to a dedicated gigsge_uat_app owner instead of postgres.",
+      "priority": "medium",
+      "status": "not_started",
+      "phase": "m1_uat_round1",
+      "notes": "Improvement plan #4. Agent prepares SQL; product owner runs it."
+    },
+    {
+      "task": "Create a dedicated Resend API key for UAT and add it as a new version of resend-api-key-uat (currently a copy of the dev key).",
+      "priority": "medium",
+      "status": "not_started",
+      "phase": "m1_uat_round1",
+      "notes": "Improvement plan #5. Product owner creates the key in Resend."
+    },
+    {
+      "task": "Add a container image retention policy (keep last 10 per service) and delete the retired gcr.io/gigsge/api and gcr.io/gigsge/web image repositories.",
+      "priority": "low",
+      "status": "not_started",
+      "phase": "m4_hardening",
+      "notes": "Improvement plan #6. Deletion is permanent; needs product-owner OK."
+    },
+    {
+      "task": "Create the production environment in a separate Google Cloud project (gigsge-prod) with backups, deletion protection, its own secrets, and live third-party keys only there.",
+      "priority": "high",
+      "status": "not_started",
+      "phase": "m4_hardening",
+      "notes": "Improvement plan #14. Strategy: docs/architecture/environments-and-integrations.md."
+    },
+    {
+      "task": "Add Cloud Logging alerts for API 5xx rates and auth_email_delivery_failed / auth_email_enqueue_failed events.",
+      "priority": "medium",
+      "status": "not_started",
+      "phase": "m4_hardening",
+      "notes": "Improvement plan #16."
     },
     {
       "task": "Implement logging for critical errors (e.g., token verification failures).",
