@@ -27,14 +27,18 @@ export async function requireAuth(request: FastifyRequest, reply: FastifyReply) 
 }
 
 /**
- * Require authenticated + both email and phone verified.
+ * Require authenticated + verified email. Phone verification is optional.
  */
-export async function requireVerified(request: FastifyRequest, reply: FastifyReply) {
+export async function requireEmailVerified(request: FastifyRequest, reply: FastifyReply) {
   await requireAuth(request, reply);
   if (reply.sent) return;
 
-  if (!request.user.emailVerified || !request.user.phoneVerified) {
-    return reply.status(403).send({ error: 'Email and phone verification required', statusCode: 403 });
+  if (!request.user.emailVerified) {
+    return reply.status(403).send({
+      error: 'Email verification required',
+      code: 'EMAIL_VERIFICATION_REQUIRED',
+      statusCode: 403,
+    });
   }
 }
 
@@ -47,5 +51,21 @@ export async function requireAdmin(request: FastifyRequest, reply: FastifyReply)
 
   if (request.user.role !== 'admin') {
     return reply.status(403).send({ error: 'Admin access required', statusCode: 403 });
+  }
+
+  if (!request.user.emailVerified) {
+    return reply.status(403).send({
+      error: 'Email verification required',
+      code: 'EMAIL_VERIFICATION_REQUIRED',
+      statusCode: 403,
+    });
+  }
+
+  if (!request.user.emailVerified) {
+    return reply.status(403).send({
+      error: 'Email verification required',
+      code: 'EMAIL_VERIFICATION_REQUIRED',
+      statusCode: 403,
+    });
   }
 }

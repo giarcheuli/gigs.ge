@@ -3,11 +3,16 @@
 # One pipeline serves all environments. The trigger's substitution variables
 # select the environment (GCP Console → Cloud Build → Triggers → Edit):
 #
-#   _DB_PASSWORD          Strong password for Cloud SQL postgres user
-#   _JWT_ACCESS_SECRET    32+ random chars (openssl rand -hex 32)
-#   _JWT_REFRESH_SECRET   32+ random chars (openssl rand -hex 32)
+#   _DB_PASSWORD_SECRET   Secret Manager secret name for this environment's DB user password
+#   _DB_USER              Restricted PostgreSQL user for this environment
+#   _DB_INSTANCE          Cloud SQL instance ID for this environment
+#   _JWT_ACCESS_SECRET_NAME  Secret Manager name for this environment's access-token secret
+#   _JWT_REFRESH_SECRET_NAME Secret Manager name for this environment's refresh-token secret
 #   _API_URL              Public URL of the API (e.g. https://api.uat.gigs.ge)
 #   _FRONTEND_URL         Public URL of the web app (e.g. https://uat.gigs.ge)
+#   _RESEND_API_SECRET    Secret Manager secret name for this environment's Resend key
+#   _AUTH_EMAIL_QUEUE     Cloud Tasks queue name for this environment
+#   _API_RUNTIME_SERVICE_ACCOUNT  Environment-specific Cloud Run API identity
 #   _API_SERVICE          Cloud Run service name for the API (gigsge-api | gigsge-api-dev)
 #   _WEB_SERVICE          Cloud Run service name for the web app (gigsge-web | gigsge-web-dev)
 #   _DB_NAME              Postgres database name (gigsge | gigsge_dev)
@@ -15,17 +20,16 @@
 # NEVER put real secret values in this file. This file is in source control.
 
 steps:
-  # ── 0. Ensure Cloud SQL database exists ───────────────────────────────────
-  # Runs before any build step. Succeeds whether or not the DB already exists.
+  # Fail before building if any environment-specific database, secret, queue, URL, or identity is missing.
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: bash
     args:
       - '-c'
       - |
-        gcloud sql databases create ${_DB_NAME} \
-          --instance=gigsge-uat-db \
-          --project=$PROJECT_ID \
-          || echo "Database already exists, continuing..."
+        if [[ -z "${_DB_PASSWORD_SECRET}" || -z "${_DB_USER}" || -z "${_DB_INSTANCE}" || -z "${_DB_NAME}" || -z "${_RESEND_API_SECRET}" || -z "${_AUTH_EMAIL_QUEUE}" || -z "${_API_RUNTIME_SERVICE_ACCOUNT}" || -z "${_API_URL}" || -z "${_FRONTEND_URL}" || -z "${_JWT_ACCESS_SECRET_NAME}" || -z "${_JWT_REFRESH_SECRET_NAME}" || -z "${_API_SERVICE}" || -z "${_WEB_SERVICE}" ]]; then
+          echo "Required environment-specific database, service, secret, queue, URL, or runtime identity substitutions are missing." >&2
+          exit 1
+        fi
 
   # ── 1. Build the API Image (TypeScript Fastify) ────────────────────────────
   - name: 'gcr.io/cloud-builders/docker'
@@ -69,15 +73,17 @@ steps:
       - 'deploy'
       - '${_API_SERVICE}'
       - '--region=us-central1'
-      - '--add-cloudsql-instances=gigsge:us-central1:gigsge-uat-db'
+      - '--add-cloudsql-instances=$PROJECT_ID:us-central1:${_DB_INSTANCE}'
       - '--allow-unauthenticated'
       - '--timeout=300s'
+      - '--service-account=${_API_RUNTIME_SERVICE_ACCOUNT}'
       - '--container=api'
       - '--image=gcr.io/$PROJECT_ID/${_API_SERVICE}'
       - '--port=3001'
       - '--cpu=1'
       - '--memory=512Mi'
-      - '--update-env-vars=INSTANCE_CONNECTION_NAME=gigsge:us-central1:gigsge-uat-db,DB_PASSWORD=${_DB_PASSWORD},DB_NAME=${_DB_NAME},JWT_ACCESS_SECRET=${_JWT_ACCESS_SECRET},JWT_REFRESH_SECRET=${_JWT_REFRESH_SECRET},NODE_ENV=production,FRONTEND_URL=${_FRONTEND_URL},ENABLE_UAT_SEED=true'
+      - '--update-env-vars=INSTANCE_CONNECTION_NAME=$PROJECT_ID:us-central1:${_DB_INSTANCE},DB_USER=${_DB_USER},DB_NAME=${_DB_NAME},NODE_ENV=production,FRONTEND_URL=${_FRONTEND_URL},EMAIL_FROM=noreply@gigs.ge,GCP_PROJECT_ID=$PROJECT_ID,AUTH_EMAIL_TASK_LOCATION=us-central1,AUTH_EMAIL_TASK_QUEUE=${_AUTH_EMAIL_QUEUE},AUTH_EMAIL_TASK_TARGET_URL=${_API_URL}/api/v1/auth/internal/email-delivery,ENABLE_UAT_SEED=true'
+      - '--update-secrets=DB_PASSWORD=${_DB_PASSWORD_SECRET}:latest,JWT_ACCESS_SECRET=${_JWT_ACCESS_SECRET_NAME}:latest,JWT_REFRESH_SECRET=${_JWT_REFRESH_SECRET_NAME}:latest,RESEND_API_KEY=${_RESEND_API_SECRET}:latest'
       - '--container=redis'
       - '--image=redis:7-alpine'
       - '--cpu=0.5'
@@ -97,14 +103,19 @@ steps:
 # Default substitution values — override per environment in each Cloud Build trigger.
 # Leaving a secret empty here is intentional: the trigger must supply real values.
 substitutions:
-  _DB_PASSWORD: ''           # REQUIRED — Cloud SQL postgres password
-  _JWT_ACCESS_SECRET: ''     # REQUIRED — 32+ char random string
-  _JWT_REFRESH_SECRET: ''    # REQUIRED — 32+ char random string
+  _DB_PASSWORD_SECRET: ''    # REQUIRED — Secret Manager name for this environment's DB user password
+  _DB_USER: ''               # REQUIRED — restricted PostgreSQL user for this environment
+  _DB_INSTANCE: ''           # REQUIRED — Cloud SQL instance ID
+  _JWT_ACCESS_SECRET_NAME: '' # REQUIRED — Secret Manager name for this environment's access-token secret
+  _JWT_REFRESH_SECRET_NAME: '' # REQUIRED — Secret Manager name for this environment's refresh-token secret
   _API_URL: ''               # REQUIRED — public URL of the API
   _FRONTEND_URL: ''          # REQUIRED — public URL of the web app
-  _API_SERVICE: 'gigsge-api' # Cloud Run service name for the API
-  _WEB_SERVICE: 'gigsge-web' # Cloud Run service name for the web app
-  _DB_NAME: 'gigsge'         # Postgres database name
+  _RESEND_API_SECRET: ''     # REQUIRED — Secret Manager secret name for this environment
+  _AUTH_EMAIL_QUEUE: ''      # REQUIRED — Cloud Tasks queue for this environment
+  _API_RUNTIME_SERVICE_ACCOUNT: '' # REQUIRED — dedicated API identity for this environment
+  _DB_NAME: ''               # REQUIRED — database name for this environment
+  _API_SERVICE: ''           # REQUIRED — environment-specific API service name
+  _WEB_SERVICE: ''           # REQUIRED — environment-specific web service name
 
 options:
   logging: CLOUD_LOGGING_ONLY

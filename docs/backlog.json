@@ -1,16 +1,17 @@
 {
   "meta": {
-    "updatedAt": "2026-10-07",
-    "goal": "Deploy the UAT slice for stakeholder testing, then complete deal-lifecycle automation, billing, and uploads on the path to public soft launch.",
-    "repoState": "uat_deploy_pending",
-    "summary": "Full audit on 2026-10-07 confirmed the happy-path UAT slice (auth, gigs, applications, contracts, basic notifications) is implemented with mocked-DB integration tests (~1,670 lines). Branch consolidation done: uat/first-slice fully merged into main (PR #14) and retired; orphaned fix/web-auth-redirect merged 2026-10-07; main is now the canonical branch. Not yet implemented: contract timers (48h auto-complete, 14d overdue, 7d dispute auto-resolve), billing/invoicing, file uploads (R2), dispute evidence/arbitration, admin app (placeholder only), server-side contact-visibility enforcement, real email/SMS. NEW REQUIREMENT (2026-10-07): all contract timeframes and fee percentages must be runtime-configurable via a platform settings store managed from the admin panel — no hard-coded business constants. Next gate: fix Cloud Build _API_URL substitution, deploy to Cloud Run, pass smoke-check, deliver stakeholder guides + FAQ."
+    "updatedAt": "2026-10-19",
+    "goal": "Complete the trust-critical marketplace flows and make business rules configurable before public soft launch.",
+    "repoState": "development_active",
+    "summary": "Dev and UAT Cloud Run environments are live. Email-only access (PR #17), mutual cancellation (PR #19), server-side gig visibility enforcement (PR #21), and production email delivery through Resend (PR #23) are deployed to dev. Live public API check found no restricted gig values in the tested response; six health checks passed. Real-mailbox verification and password-reset emails work on dev. Remaining gaps include contract timers, evidence/arbitration, billing, admin operations, and uploads. Configurable-settings backend work remains unmerged on feat/configurable-contract-settings. Guides/FAQ are postponed; fixed-price only remains initial scope and range/negotiable contracts are pinned for early post-release."
   },
   "milestones": [
     {
       "id": "M0",
       "name": "Reality sync & UAT deploy",
-      "status": "in_progress",
-      "exitCriteria": "Live Cloud Run URL passing scripts/smoke-check.sh; stakeholder guides and FAQ delivered; backlog and branch policy synced (done 2026-10-07)."
+      "status": "done",
+      "completedAt": "2026-10-07",
+      "exitCriteria": "Dev and UAT Cloud Run environments are live on custom domains, use separate databases, and pass the smoke check; branch promotion policy is documented. Guides and FAQ are intentionally deferred."
     },
     {
       "id": "M1",
@@ -22,7 +23,7 @@
       "id": "M2",
       "name": "Deal lifecycle completion",
       "status": "not_started",
-      "exitCriteria": "Configurable platform settings store live; BullMQ timers (48h auto-complete, 14d overdue, 7d dispute auto-resolve) reading from settings; dispute evidence + arbiter resolution working; minimal admin panel (settings editor + dispute queue); contact visibility enforced server-side."
+      "exitCriteria": "Email-only eligibility rules are implemented; mutual cancellation request/consent flow is complete; configurable settings are editable by admins; lifecycle timers, dispute evidence/arbiter resolution, and server-side visibility rules work against documented policy snapshots; minimal admin operations are usable."
     },
     {
       "id": "M3",
@@ -34,7 +35,7 @@
       "id": "M4",
       "name": "Launch hardening",
       "status": "not_started",
-      "exitCriteria": "Real email/SMS provider; gig search/filter/pagination; profile editing; reviews; e2e tests; CI smoke gate; Georgian i18n; PWA; error logging."
+      "exitCriteria": "Production email provider works for verification and password reset; SMS is not required while phone verification is optional; gig search/filter/pagination; profile editing; reviews; e2e tests; CI smoke gate; Georgian i18n; PWA; error logging."
     },
     {
       "id": "M5",
@@ -63,8 +64,8 @@
     },
     {
       "order": 4,
-      "task": "Prepare stakeholder-facing docs, smoke checks, and a repeatable UAT environment.",
-      "status": "in_progress",
+      "task": "Establish Cloud Run development and UAT environments with repeatable smoke checks.",
+      "status": "done",
       "completedSubtasks": [
         "UAT runbook at docs/guides/uat-runbook.md",
         "Docker Compose stack (docker-compose.yml + Dockerfiles) — idempotent schema push + UAT seed on container start",
@@ -73,13 +74,11 @@
         "API ESM startup crash fixed and deployed; Cloud Run live at gigsge-web/gigsge-api (2026-10-07)",
         "Smoke check passed 6/6 against live Cloud Run URLs (2026-10-07, scripts/smoke-check.ps1 added for Windows)",
         "Custom domain live (2026-10-07): uat.gigs.ge → web, api.uat.gigs.ge → API; Cloudflare DNS; smoke check 6/6 against new URLs",
-        "Dev environment live (2026-10-07): dev branch → gigsge-api-dev/gigsge-web-dev → dev.gigs.ge + api.dev.gigs.ge, separate gigsge_dev database, parameterized cloudbuild.yaml; branching ladder now dev → main (uat) → future qa/prod"
+        "Dev environment live (2026-10-07): dev branch → gigsge-api-dev/gigsge-web-dev → dev.gigs.ge + api.dev.gigs.ge, separate gigsge_dev database, parameterized cloudbuild.yaml; branching ladder now dev → main (uat) → future qa/prod",
+        "Dev and UAT smoke checks passed 6/6 (2026-10-07)."
       ],
-      "remaining": [
-        "Stakeholder user guides (step-by-step for poster and worker roles) — postponed by user",
-        "FAQ for trust model and fee structure — postponed by user"
-      ],
-      "notes": "Decision 2026-10-07: deploy on Cloud Run (pipeline already exists); the GCE VM option is dropped. Domain gigs.ge bought at domenebi.ge, DNS hosted on Cloudflare."
+      "remaining": [],
+      "notes": "Decision 2026-10-07: deploy on Cloud Run; GCE VM option dropped. Tester guides and FAQ are explicitly postponed and are not deployment blockers."
     }
   ],
   "uiBugs": [
@@ -145,9 +144,33 @@
     {
       "task": "Create a platform_settings store so contract timeframes (48h auto-complete, 24h grace, 14d overdue, 7d dispute auto-resolve) and fee percentages (3% poster / 2% worker) are runtime-configurable, with admin API to read and update them.",
       "priority": "high",
-      "status": "not_started",
+      "status": "in_progress",
       "phase": "m2_deal_lifecycle",
-      "notes": "Foundation for M2 and M3. No business constant may be hard-coded; all timers and fee logic must read from settings. Requirement added 2026-10-07."
+      "notes": "Backend implementation is on feat/configurable-contract-settings; not merged or deployed. Spec: docs/specs/feat-configurable-contract-settings.md on that branch. Admin UI, timers, and billing integrations remain separate tasks."
+    },
+    {
+      "task": "Align registration, web prompts, shared guards, and API access checks so email verification is mandatory for posting/applying and phone verification is optional; cover all verification/error states.",
+      "priority": "high",
+      "status": "done",
+      "phase": "m2_auth_rules",
+      "completedAt": "2026-10-14",
+      "notes": "Implemented and deployed to dev in PR #17. Email is required for posting/applying; phone remains collected but optional to verify. Includes email-only guard, email OTP only, clear optional-phone copy, server resend cooldown, stable error codes, and return-to-action verification flow. Requirements: docs/specs/feat-email-required-phone-optional.md."
+    },
+    {
+      "task": "Implement production email delivery for verification OTP and password reset, including delivery failures and resend/expiry handling.",
+      "priority": "high",
+      "status": "done",
+      "phase": "m4_hardening",
+      "completedAt": "2026-10-19",
+      "notes": "Delivered in PR #23 (see the provider-integration item below). SMS provider/phone verification is optional and is not a launch blocker under the 2026-10-14 product decision."
+    },
+    {
+      "task": "Replace unilateral contract cancellation with a mutual request/accept/decline/withdraw workflow, including audit history, notifications, UI states, concurrency handling, and lifecycle regression tests.",
+      "priority": "high",
+      "status": "done",
+      "phase": "m2_deal_lifecycle",
+      "completedAt": "2026-10-18",
+      "notes": "Implemented and deployed to dev in PR #19. Requests remain pending until accepted, declined, withdrawn, or superseded; mutual cancellation carries no fee. Worker quit and poster dispute remain separate. Requirements: docs/specs/feat-mutual-contract-cancellation.md."
     },
     {
       "task": "Implement BullMQ background workers for contract timers: 48h auto-complete, 14-day overdue auto-complete, 7-day dispute auto-resolve — all reading timeframes from platform_settings.",
@@ -164,8 +187,10 @@
     {
       "task": "Enforce contact-info and field visibility rules server-side in API responses (visContact etc. exist in schema but are not enforced).",
       "priority": "high",
-      "status": "not_started",
-      "phase": "m2_deal_lifecycle"
+      "status": "done",
+      "phase": "m2_deal_lifecycle",
+      "completedAt": "2026-10-18",
+      "notes": "Implemented and deployed to dev in PR #21. Board, detail, application-history, and contract-detail responses use a shared visibility projection; public response test found no restricted values. Requirements: docs/specs/feat-server-gig-visibility.md."
     },
     {
       "task": "Build minimal admin app: admin login, platform settings editor, dispute queue with arbiter resolution UI.",
@@ -199,10 +224,12 @@
       "phase": "m3_money_media"
     },
     {
-      "task": "Integrate real email and SMS providers for OTP and notifications (currently dev-mode stubs returning codes in responses).",
+      "task": "Integrate a production email provider for email verification and password reset (currently delivery is stubbed). Phone SMS is optional and not required for release.",
       "priority": "high",
-      "status": "not_started",
-      "phase": "m4_hardening"
+      "status": "done",
+      "phase": "m4_hardening",
+      "completedAt": "2026-10-19",
+      "notes": "Deployed to dev in PR #23 and verified with a real mailbox (verification code and password reset). Resend delivery runs through encrypted, signed Cloud Tasks jobs, with atomic single-use reset tokens, shared Postgres HMAC-IP limiting with timing padding, and minimal reset screens. Dev runs on its own Cloud SQL instance (gigsge-dev-db); each environment has its own DB/JWT secrets, queue, and runtime service account. Follow-ups: give UAT its own Resend key (it currently copies dev's) and a dedicated DB owner instead of postgres. See docs/guides/uat-runbook.md section 3."
     },
     {
       "task": "Add end-to-end tests for user flows (e.g., gig poster creating a gig, worker applying, contract completion).",
@@ -272,14 +299,16 @@
     {
       "task": "Create step-by-step guides for gig posters and workers (e.g., how to post a gig, how to apply for gigs).",
       "priority": "high",
-      "status": "not_started",
-      "phase": "m0_uat_deploy"
+      "status": "postponed",
+      "phase": "post_launch",
+      "notes": "Explicitly deferred by product owner on 2026-10-14; not a development or deployment blocker."
     },
     {
       "task": "Develop a FAQ section addressing common user concerns.",
       "priority": "high",
-      "status": "not_started",
-      "phase": "m0_uat_deploy"
+      "status": "postponed",
+      "phase": "post_launch",
+      "notes": "Explicitly deferred by product owner on 2026-10-14; not a development or deployment blocker."
     },
     {
       "task": "Define a go-to-market plan (e.g., target audience segmentation, social media campaigns).",
@@ -296,8 +325,9 @@
     {
       "task": "Develop educational content on the fee structure and dispute resolution process.",
       "priority": "medium",
-      "status": "not_started",
-      "phase": "m4_hardening"
+      "status": "postponed",
+      "phase": "post_launch",
+      "notes": "Deferred with user guides and FAQ until after platform development."
     },
     {
       "task": "Host webinars or Q&A sessions for early adopters.",
@@ -310,8 +340,9 @@
     {
       "task": "Finalize user-facing documentation (e.g., platform overview, contract lifecycle explanation, dispute resolution flow).",
       "priority": "high",
-      "status": "not_started",
-      "phase": "m1_uat_round1"
+      "status": "postponed",
+      "phase": "post_launch",
+      "notes": "User guides and FAQ are postponed by product owner; not a development blocker."
     },
     {
       "task": "Add developer documentation for API usage.",
@@ -348,6 +379,13 @@
       "priority": "low",
       "status": "not_started",
       "phase": "post_launch"
+    },
+    {
+      "task": "Add range- and negotiable-price contract acceptance and negotiation after the first usable release.",
+      "priority": "high",
+      "status": "postponed",
+      "phase": "post_launch_early",
+      "notes": "Important product pin from product owner 2026-10-14: initial usable release may remain fixed-price only; scope and negotiation UX must be designed shortly after initial release."
     }
   ],
   "marketing": [

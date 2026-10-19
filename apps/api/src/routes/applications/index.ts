@@ -4,7 +4,8 @@ import { z } from 'zod';
 import { createApplicationSchema } from '@gigs/shared/schemas';
 import { db } from '../../db/index.js';
 import { applications, contracts, gigs, notifications } from '../../db/schema/index.js';
-import { requireAuth, requireVerified } from '../../middleware/guards.js';
+import { requireAuth, requireEmailVerified } from '../../middleware/guards.js';
+import { loadGigVisibilityContext, presentGig } from '../../lib/gig-visibility.js';
 
 const gigIdParamsSchema = z.object({ id: z.string().uuid() });
 const applicationIdParamsSchema = z.object({ id: z.string().uuid() });
@@ -13,7 +14,7 @@ const createApplicationInputSchema = createApplicationSchema.extend({
 });
 
 export async function applicationsRoutes(app: FastifyInstance) {
-  app.post('/', { preHandler: [requireVerified] }, async (request, reply) => {
+  app.post('/', { preHandler: [requireEmailVerified] }, async (request, reply) => {
     const body = createApplicationInputSchema.parse(request.body);
 
     const gig = await db.query.gigs.findFirst({
@@ -164,7 +165,16 @@ export async function applicationsRoutes(app: FastifyInstance) {
       },
     });
 
-    return reply.send({ data });
+    const visibility = await loadGigVisibilityContext(
+      request.user,
+      data.map((application) => application.gig.id),
+    );
+    return reply.send({
+      data: data.map((application) => ({
+        ...application,
+        gig: presentGig(application.gig, visibility),
+      })),
+    });
   });
 
   /**

@@ -75,7 +75,7 @@ export default function GigDetailPage() {
   const { user } = useAuth();
   const qc = useQueryClient();
 
-  const isVerified = Boolean(user?.emailVerified && user?.phoneVerified);
+  const isVerified = Boolean(user?.emailVerified);
 
   // ── Fetch gig ──
   const {
@@ -415,13 +415,13 @@ export default function GigDetailPage() {
             ) : (
               <>
                 <p className="text-sm text-gray-600 mb-3">
-                  Verify your email and phone to apply for gigs.
+                  Verify your email to apply for gigs. Phone verification is optional.
                 </p>
                 <Link
-                  href="/verify"
+                  href={`/verify?next=${encodeURIComponent(`/gigs/${gig.id}`)}`}
                   className="rounded-lg bg-brand-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 transition-colors"
                 >
-                  Verify account
+                  Verify email
                 </Link>
               </>
             )}

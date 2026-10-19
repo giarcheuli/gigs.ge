@@ -63,14 +63,16 @@ Visitor (unauthenticated)
   └─ can: browse board (limited view)
 
 User (authenticated)
-  ├─ Unverified  → same board view as visitor
-  └─ Verified    → full board view, post, apply, contracts
+  ├─ Email unverified → same board view as visitor; cannot post or apply
+  └─ Email verified   → full board view, post, apply, contracts
 
 Admin
   └─ full access + moderation + arbiter tools
 ```
 
-A **user** becomes _verified_ only after both email **and** phone are confirmed via OTP/OTC.
+A user is **verified for posting and applying** after confirming their email. A phone
+number is collected at registration for this release, but phone verification is optional
+and does not gate product access. See [the email-required, phone-optional requirements](docs/specs/feat-email-required-phone-optional.md).
 
 ---
 
@@ -91,10 +93,10 @@ A **user** becomes _verified_ only after both email **and** phone are confirmed 
 
 - Same board view as visitors.
 - Can view and edit own profile.
-- **Cannot** post a gig or apply.
-- Prompted to complete verification on every restricted action.
+- If email is not verified, **cannot** post a gig or apply; prompt specifically for email verification.
+- Phone verification is optional and never blocks posting or applying in this release.
 
-### 3.3 Authenticated & Verified Users
+### 3.3 Authenticated & Email-Verified Users
 
 | # | Capability |
 |---|-----------|
@@ -156,17 +158,19 @@ A **user** becomes _verified_ only after both email **and** phone are confirmed 
 ### 4.3 Verification Steps
 
 ```
-Register ──► Send verification email (link + 6-digit OTC)
-         └─► Send verification SMS  (6-digit OTP)
+Register ──► Send verification email (6-digit OTC)
+         └─► phoneVerified remains false until optional phone verification is offered
 
-email_verified AND phone_verified ──► user status = VERIFIED
+email_verified ──► user may post and apply
 ```
 
 - OTP/OTC expires after **15 minutes**.
 - Resend allowed after **60 seconds** (rate-limited).
 - Max **5 attempts** per code before new code required.
+- Email verification is mandatory for posting and applying. Phone verification is optional and does not affect eligibility.
+- Keep phone-number collection and phone-number verification separate: the number remains required and unique at registration in this release; users are not required to prove control of it.
 
-> **v1 PoC:** SMS delivery is stubbed — OTP returned in API response (dev mode).
+> **Launch dependency:** Email delivery must work in production. SMS integration is optional and is not a launch gate unless the product decision changes.
 
 ### 4.4 Age Restriction
 
@@ -384,7 +388,10 @@ DRAFT
   └── Both sign ──► IN_PROGRESS
 
 IN_PROGRESS
-  ├── Mutual cancel within 24h of signing ──► CANCELLED (no fee, tracked)
+  ├── Either party requests cancellation ──► remains IN_PROGRESS while awaiting the other party
+  │     ├── Other party agrees ──► CANCELLED (mutual, no fee)
+  │     ├── Other party declines ──► remains IN_PROGRESS
+  │     └── Requester withdraws ──► remains IN_PROGRESS
   │
   ├── Worker: "Job Complete" ──► PENDING_COMPLETION
   │     (available: no earlier than halfway through total job duration — see §7.10)
@@ -407,6 +414,12 @@ COMPLETED ──► FINAL (immutable)
 CANCELLED ──► FINAL (immutable)
 ```
 
+A pending cancellation request does not itself change the contract state or block normal
+contract actions. Silence never cancels a contract. If another valid lifecycle action
+changes the contract state first, the pending request is closed as superseded. Only the
+other party can accept or decline; only the requester can withdraw. See [mutual
+cancellation requirements](docs/specs/feat-mutual-contract-cancellation.md).
+
 ### 7.7 Worker Rejects Contract Draft
 
 When the worker rejects a contract draft:
@@ -421,8 +434,8 @@ No limit on revision rounds — the poster controls when to give up.
 
 | Timing | Fee | Consequences |
 |--------|-----|-------------|
-| Within 24h of signing | No fee | Same as mutual cancel; poster can leave negative review |
-| After 24h of signing | Worker pays 2% fee on agreed price | Tracked on record; poster can leave negative review |
+| Within the saved grace period, measured from contract activation (second signature) | No worker fee | Worker may quit unilaterally; poster is notified |
+| After the saved grace period | Worker may owe the configured worker fee | Tracked for future invoicing; poster is notified |
 
 Contract status → `QUIT`.
 
@@ -536,7 +549,7 @@ gigs.ge takes a **5% total fee** on every completed contract.
 | Arbiter favors poster | 0% | 2% |
 | Arbiter favors worker | 3% | 0% |
 | Arbiter dismisses both | 0% | 0% |
-| Mutual cancel within 24h | 0% | 0% |
+| Mutual cancellation accepted by both parties | 0% | 0% |
 | Worker quits within 24h | 0% | 0% |
 | Worker quits after 24h | 0% | 2% |
 
@@ -1010,12 +1023,12 @@ UNIQUE (gig_id, reporter_id)
 | Method | Path | Description |
 |--------|------|-------------|
 | POST | `/auth/register` | Create account |
-| POST | `/auth/login` | Email+password or phone+OTP |
+| POST | `/auth/login` | Email + password |
 | POST | `/auth/logout` | Revoke refresh token |
 | POST | `/auth/refresh` | New access token |
-| POST | `/auth/verify/email` | Confirm email OTC |
-| POST | `/auth/verify/phone` | Confirm phone OTP |
-| POST | `/auth/resend-otp` | Resend OTC/OTP |
+| POST | `/auth/verify/email` | Confirm required email OTC |
+| POST | `/auth/verify/phone` | Optional phone OTP verification; never an access gate |
+| POST | `/auth/resend-otp` | Resend email OTC; phone OTP only if optional verification is offered |
 | POST | `/auth/forgot-password` | Initiate reset |
 | POST | `/auth/reset-password` | Complete reset |
 
@@ -1071,7 +1084,10 @@ UNIQUE (gig_id, reporter_id)
 | POST | `/contracts/:id/complete` | ✅ party | Mark "Job Complete" |
 | POST | `/contracts/:id/not-done` | ✅ poster | Mark "Job Not Done" |
 | POST | `/contracts/:id/quit` | ✅ worker | Quit contract |
-| POST | `/contracts/:id/cancel` | ✅ both | Mutual cancel (within 24h) |
+| POST | `/contracts/:id/cancellation-requests` | ✅ party | Request mutual cancellation while in progress |
+| POST | `/contracts/:id/cancellation-requests/:requestId/accept` | ✅ recipient | Agree to cancel; no fee |
+| POST | `/contracts/:id/cancellation-requests/:requestId/decline` | ✅ recipient | Decline; contract remains active |
+| DELETE | `/contracts/:id/cancellation-requests/:requestId` | ✅ requester | Withdraw pending request |
 | GET | `/users/me/contracts` | ✅ | List own contracts |
 
 ### 15.6 Contract Appendices
@@ -1171,10 +1187,10 @@ UNIQUE (gig_id, reporter_id)
 | Edit Gig | `/gigs/:id/edit` | Owner |
 | Register | `/register` | Unauthenticated |
 | Login | `/login` | Unauthenticated |
-| Verify Email | `/verify/email` | Unverified |
-| Verify Phone | `/verify/phone` | Unverified |
+| Verify Email | `/verify` | Authenticated with unverified email |
 | My Gigs (Jobs/Work) | `/my-gigs` | Auth |
 | Contract Detail | `/contracts/:id` | Party |
+| Cancellation Request Panel | `/contracts/:id` | Contract party; state-dependent |
 | Invoices | `/invoices` | Auth |
 | Invoice Detail | `/invoices/:id` | Owner |
 | Inbox | `/inbox` | Auth |

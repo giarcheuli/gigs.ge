@@ -3,8 +3,8 @@ import { and, eq, desc } from 'drizzle-orm';
 import { createGigSchema, updateGigSchema } from '@gigs/shared/schemas';
 import { db } from '../../db/index.js';
 import { gigs } from '../../db/schema/index.js';
-import { requireAuth, requireVerified } from '../../middleware/guards.js';
-import { verifyAccessToken } from '../../lib/auth.js';
+import { requireAuth, requireEmailVerified } from '../../middleware/guards.js';
+import { loadGigVisibilityContext, optionalGigViewer, presentGig } from '../../lib/gig-visibility.js';
 
 const DEFAULT_GIG_EXPIRY_DAYS = 30;
 
@@ -43,7 +43,7 @@ function validatePricing(pricing: GigPricingInput): string | null {
 }
 
 export async function gigsRoutes(app: FastifyInstance) {
-  app.post('/', { preHandler: [requireVerified] }, async (request, reply) => {
+  app.post('/', { preHandler: [requireEmailVerified] }, async (request, reply) => {
     const body = createGigSchema.parse(request.body);
     const pricingError = validatePricing(body);
 
@@ -172,13 +172,15 @@ export async function gigsRoutes(app: FastifyInstance) {
     return reply.send({ data });
   });
 
-  app.get('/', async (_request, reply) => {
+  app.get('/', async (request, reply) => {
     const data = await db.query.gigs.findMany({
       where: eq(gigs.status, 'active'),
       orderBy: [desc(gigs.createdAt)],
     });
 
-    return reply.send({ data });
+    const viewer = optionalGigViewer(request.headers.authorization);
+    const visibility = await loadGigVisibilityContext(viewer, data.map((gig) => gig.id));
+    return reply.send({ data: data.map((gig) => presentGig(gig, visibility)) });
   });
 
   app.get('/:id', async (request, reply) => {
@@ -194,21 +196,14 @@ export async function gigsRoutes(app: FastifyInstance) {
 
     // Poster can see their own gig regardless of status.
     // All other viewers only see active gigs.
-    const authHeader = request.headers.authorization;
+    const viewer = optionalGigViewer(request.headers.authorization);
     if (gig.status !== 'active') {
-      let requesterId: string | null = null;
-      if (authHeader?.startsWith('Bearer ')) {
-        try {
-          requesterId = verifyAccessToken(authHeader.slice(7)).sub;
-        } catch {
-          // invalid token — treat as unauthenticated
-        }
-      }
-      if (requesterId !== gig.posterId) {
+      if (viewer?.sub !== gig.posterId) {
         return reply.status(404).send({ error: 'Gig not found', statusCode: 404 });
       }
     }
 
-    return reply.send({ gig });
+    const visibility = await loadGigVisibilityContext(viewer, [gig.id]);
+    return reply.send({ gig: presentGig(gig, visibility) });
   });
 }

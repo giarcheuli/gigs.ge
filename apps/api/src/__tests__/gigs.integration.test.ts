@@ -5,6 +5,8 @@ jest.mock('../db/index.js', () => ({
         findFirst: jest.fn(),
         findMany: jest.fn(),
       },
+      contracts: { findMany: jest.fn() },
+      infoRequests: { findMany: jest.fn() },
     },
     insert: jest.fn(),
     update: jest.fn(),
@@ -23,6 +25,8 @@ const mockDb = db as unknown as {
       findFirst: jest.Mock;
       findMany: jest.Mock;
     };
+    contracts: { findMany: jest.Mock };
+    infoRequests: { findMany: jest.Mock };
   };
   insert: jest.Mock;
   update: jest.Mock;
@@ -82,18 +86,20 @@ describe('Gigs Routes Integration', () => {
     jest.clearAllMocks();
     mockDb.query.gigs.findFirst.mockReset();
     mockDb.query.gigs.findMany.mockReset();
+    mockDb.query.contracts.findMany.mockReset().mockResolvedValue([]);
+    mockDb.query.infoRequests.findMany.mockReset().mockResolvedValue([]);
     mockDb.insert.mockReset();
     mockDb.update.mockReset();
   });
 
-  it('allows a verified poster to create a draft gig', async () => {
+  it('allows an email-verified poster with an unverified phone to create a draft gig', async () => {
     mockDb.insert.mockReturnValueOnce(mockInsertReturning(draftGig));
 
     const app = await buildApp();
     const response = await app.inject({
       method: 'POST',
       url: '/api/v1/gigs',
-      headers: { authorization: `Bearer ${makeToken()}` },
+      headers: { authorization: `Bearer ${makeToken({ phoneVerified: false })}` },
       payload: {
         shortDescription: draftGig.shortDescription,
         longDescription: draftGig.longDescription,
@@ -136,7 +142,8 @@ describe('Gigs Routes Integration', () => {
 
     expect(response.statusCode).toBe(403);
     expect(response.json()).toEqual({
-      error: 'Email and phone verification required',
+      error: 'Email verification required',
+      code: 'EMAIL_VERIFICATION_REQUIRED',
       statusCode: 403,
     });
   });
@@ -220,24 +227,23 @@ describe('Gigs Routes Integration', () => {
     await app.close();
 
     expect(listResponse.statusCode).toBe(200);
-    expect(listResponse.json()).toEqual({
-      data: [
-        expect.objectContaining({
-          ...visibleGigs[0],
-          createdAt: visibleGigs[0].createdAt.toISOString(),
-          updatedAt: visibleGigs[0].updatedAt.toISOString(),
-          expiresAt: visibleGigs[0].expiresAt.toISOString(),
-        }),
-      ],
+    expect(listResponse.json().data[0]).toMatchObject({
+      shortDescription: visibleGigs[0].shortDescription,
+      longDescription: null,
+      priceFixed: visibleGigs[0].priceFixed,
+      cityId: null,
+      streetAddress: null,
+      availableFrom: null,
+      availableTo: null,
     });
+    expect(listResponse.json().data[0].streetAddress).not.toBe(visibleGigs[0].streetAddress);
 
     expect(getResponse.statusCode).toBe(200);
-    expect(getResponse.json()).toEqual({
+    expect(getResponse.json()).toMatchObject({
       gig: expect.objectContaining({
-        ...visibleGigs[0],
-        createdAt: visibleGigs[0].createdAt.toISOString(),
-        updatedAt: visibleGigs[0].updatedAt.toISOString(),
-        expiresAt: visibleGigs[0].expiresAt.toISOString(),
+        longDescription: null,
+        cityId: null,
+        streetAddress: null,
       }),
     });
 
