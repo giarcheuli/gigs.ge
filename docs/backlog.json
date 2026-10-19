@@ -280,44 +280,45 @@
     {
       "task": "Add a GitHub Actions CI gate that builds shared/api/web and runs API tests on every PR to dev and main; make it a required check.",
       "priority": "high",
-      "status": "not_started",
+      "status": "done",
       "phase": "m1_uat_round1",
-      "notes": "Audit 2026-10-19: no .github/workflows exists; PRs are checked only by GitGuardian, so a failing test does not block a merge. Improvement plan #1."
+      "completedAt": "2026-10-19",
+      "notes": ".github/workflows/ci.yml job build-and-test (shared build, API typecheck + tests, web and admin builds) is a required status check in the Protect dev and Protect main rulesets. Improvement plan #1."
     },
     {
       "task": "Enable daily automated backups (7-day retention) on the UAT Cloud SQL instance gigsge-uat-db.",
-      "priority": "high",
-      "status": "not_started",
-      "phase": "m1_uat_round1",
-      "notes": "Deletion protection enabled 2026-10-19; backups still off and need product-owner approval for the small cost. Improvement plan #2."
+      "priority": "low",
+      "status": "postponed",
+      "phase": "m4_hardening",
+      "notes": "Product owner 2026-10-19: dev/UAT hold only disposable test data; not a priority. Production gets backups from day one. Improvement plan #2."
     },
     {
       "task": "Replace the default compute service account (project Editor) used by deploy triggers and web services with dedicated least-privilege deployer and web-runtime identities; remove legacy project-wide roles from the unused Cloud Build account.",
-      "priority": "high",
-      "status": "not_started",
-      "phase": "m1_uat_round1",
-      "notes": "Improvement plan #3. See docs/operations/cloud-inventory.md."
+      "priority": "medium",
+      "status": "postponed",
+      "phase": "m4_hardening",
+      "notes": "Product owner 2026-10-19: deferred until production setup. Improvement plan #3. See docs/operations/cloud-inventory.md."
     },
     {
       "task": "In one Cloud SQL Studio session on gigsge-uat-db: drop leftover gigsge_dev database and gigsge_dev_app login, and move UAT tables to a dedicated gigsge_uat_app owner instead of postgres.",
-      "priority": "medium",
-      "status": "not_started",
-      "phase": "m1_uat_round1",
-      "notes": "Improvement plan #4. Agent prepares SQL; product owner runs it."
+      "priority": "low",
+      "status": "postponed",
+      "phase": "m4_hardening",
+      "notes": "Deferred 2026-10-19 with other infrastructure hardening. Improvement plan #4."
     },
     {
       "task": "Create a dedicated Resend API key for UAT and add it as a new version of resend-api-key-uat (currently a copy of the dev key).",
-      "priority": "medium",
-      "status": "not_started",
-      "phase": "m1_uat_round1",
-      "notes": "Improvement plan #5. Product owner creates the key in Resend."
+      "priority": "low",
+      "status": "postponed",
+      "phase": "m4_hardening",
+      "notes": "Deferred 2026-10-19. Improvement plan #5."
     },
     {
       "task": "Add a container image retention policy (keep last 10 per service) and delete the retired gcr.io/gigsge/api and gcr.io/gigsge/web image repositories.",
       "priority": "low",
-      "status": "not_started",
+      "status": "postponed",
       "phase": "m4_hardening",
-      "notes": "Improvement plan #6. Deletion is permanent; needs product-owner OK."
+      "notes": "Deferred 2026-10-19. Improvement plan #6. Deletion is permanent; needs product-owner OK."
     },
     {
       "task": "Create the production environment in a separate Google Cloud project (gigsge-prod) with backups, deletion protection, its own secrets, and live third-party keys only there.",
