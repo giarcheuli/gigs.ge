@@ -771,17 +771,19 @@ updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
 ```sql
 id                  UUID PRIMARY KEY DEFAULT gen_random_uuid()
 poster_id           UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
+title               TEXT CHECK (char_length(title) <= 80)  -- required by the API since 2026-10-20; NULL only on older gigs
 short_description   TEXT NOT NULL CHECK (char_length(short_description) <= 160)
 long_description    TEXT
 region_id           INT  NOT NULL REFERENCES regions(id)
 city_id             INT  REFERENCES cities(id)
 street_address      TEXT
-price_type          TEXT NOT NULL                -- 'fixed' | 'range' | 'negotiable'
+price_type          TEXT NOT NULL                -- 'fixed' | 'range' | 'negotiable'; new gigs: 'fixed' only until negotiation exists
 price_fixed         NUMERIC(10,2)
 price_range_min     NUMERIC(10,2)
 price_range_max     NUMERIC(10,2)
 available_from      TIMESTAMPTZ                  -- datetime (not just date)
 available_to        TIMESTAMPTZ                  -- datetime (not just date)
+workers_needed      INT  NOT NULL DEFAULT 1      -- poster's estimate; hiring more or fewer is allowed
 status              TEXT NOT NULL DEFAULT 'draft' -- 'draft'|'active'|'shelf'|'expired'|'archived'|'cancelled'
 vis_images          TEXT NOT NULL DEFAULT 'verified'
 vis_price           TEXT NOT NULL DEFAULT 'public'

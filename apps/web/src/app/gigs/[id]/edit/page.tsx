@@ -24,20 +24,20 @@ interface Region {
   cities: { id: number; nameEn: string }[];
 }
 
-const PRICE_TYPES = ['fixed', 'range', 'negotiable'] as const;
 const VIS_OPTS = ['public', 'authenticated', 'verified', 'on_request'] as const;
 
 const gigFormSchema = z
   .object({
+    title: z.string().trim().min(1, 'Required').max(80, 'Max 80 characters'),
     shortDescription: z.string().min(1, 'Required').max(160, 'Max 160 characters'),
     longDescription: z.string().max(5000).optional(),
     regionId: z.coerce.number().int().positive('Select a region'),
     cityId: z.union([z.coerce.number().int().positive(), z.literal(0)]).optional(),
     streetAddress: z.string().max(500).optional(),
-    priceType: z.enum(PRICE_TYPES),
+    // Only fixed prices until negotiation exists (spec feat-public-gig-board D7).
+    priceType: z.literal('fixed'),
     priceFixed: z.string().optional(),
-    priceRangeMin: z.string().optional(),
-    priceRangeMax: z.string().optional(),
+    workersNeeded: z.coerce.number().int().min(1, 'At least 1').max(100, 'Max 100'),
     availableFrom: z.string().optional(),
     availableTo: z.string().optional(),
     visImages: z.enum(VIS_OPTS).optional(),
@@ -46,18 +46,8 @@ const gigFormSchema = z
     visDates: z.enum(VIS_OPTS).optional(),
   })
   .superRefine((data, ctx) => {
-    if (data.priceType === 'fixed') {
-      if (!data.priceFixed || !/^\d+(\.\d{1,2})?$/.test(data.priceFixed)) {
-        ctx.addIssue({ code: 'custom', message: 'Enter a valid price', path: ['priceFixed'] });
-      }
-    }
-    if (data.priceType === 'range') {
-      if (!data.priceRangeMin || !/^\d+(\.\d{1,2})?$/.test(data.priceRangeMin)) {
-        ctx.addIssue({ code: 'custom', message: 'Enter a valid minimum price', path: ['priceRangeMin'] });
-      }
-      if (!data.priceRangeMax || !/^\d+(\.\d{1,2})?$/.test(data.priceRangeMax)) {
-        ctx.addIssue({ code: 'custom', message: 'Enter a valid maximum price', path: ['priceRangeMax'] });
-      }
+    if (!data.priceFixed || !/^\d+(\.\d{1,2})?$/.test(data.priceFixed)) {
+      ctx.addIssue({ code: 'custom', message: 'Enter a valid price', path: ['priceFixed'] });
     }
   });
 
@@ -87,7 +77,8 @@ export default function EditGigPage() {
       if (!res.ok) throw new Error('Not found');
       const body = (await res.json()) as { gig: {
         id: string; posterId: string; status: string;
-        shortDescription: string; longDescription: string | null;
+        title: string | null; shortDescription: string; longDescription: string | null;
+        workersNeeded: number;
         regionId: number; cityId: number | null; streetAddress: string | null;
         priceType: string; priceFixed: string | null;
         priceRangeMin: string | null; priceRangeMax: string | null;
@@ -122,15 +113,15 @@ export default function EditGigPage() {
   useEffect(() => {
     if (!gig) return;
     reset({
+      title: gig.title ?? '',
       shortDescription: gig.shortDescription,
       longDescription: gig.longDescription ?? '',
       regionId: gig.regionId,
       cityId: gig.cityId ?? 0,
       streetAddress: gig.streetAddress ?? '',
-      priceType: gig.priceType as FormData['priceType'],
+      priceType: 'fixed',
       priceFixed: gig.priceFixed ?? '',
-      priceRangeMin: gig.priceRangeMin ?? '',
-      priceRangeMax: gig.priceRangeMax ?? '',
+      workersNeeded: gig.workersNeeded ?? 1,
       availableFrom: toDatetimeLocal(gig.availableFrom),
       availableTo: toDatetimeLocal(gig.availableTo),
       visImages: gig.visImages as FormData['visImages'],
@@ -161,15 +152,15 @@ export default function EditGigPage() {
       const patchRes = await apiFetch(`/gigs/${id}`, {
         method: 'PATCH',
         body: JSON.stringify({
+          title: data.title,
           shortDescription: data.shortDescription,
           longDescription: data.longDescription || undefined,
           regionId: data.regionId,
           cityId: data.cityId && data.cityId !== 0 ? data.cityId : undefined,
           streetAddress: data.streetAddress || undefined,
           priceType: data.priceType,
-          priceFixed: data.priceType === 'fixed' ? data.priceFixed : undefined,
-          priceRangeMin: data.priceType === 'range' ? data.priceRangeMin : undefined,
-          priceRangeMax: data.priceType === 'range' ? data.priceRangeMax : undefined,
+          priceFixed: data.priceFixed,
+          workersNeeded: data.workersNeeded,
           availableFrom: data.availableFrom ? new Date(data.availableFrom).toISOString() : undefined,
           availableTo: data.availableTo ? new Date(data.availableTo).toISOString() : undefined,
           visImages: data.visImages,
@@ -250,6 +241,11 @@ export default function EditGigPage() {
 
         <section className="bg-white rounded-xl p-5 space-y-4 border border-gray-100">
           <h2 className="font-semibold text-gray-800">Description</h2>
+          <Field label="Title *" error={errors.title?.message}>
+            <input {...register('title')} type="text" maxLength={80}
+              className={inputCls(!!errors.title)} />
+            <p className="text-xs text-gray-400 mt-0.5">Max 80 characters</p>
+          </Field>
           <Field label="Short description *" error={errors.shortDescription?.message}>
             <textarea {...register('shortDescription')} rows={2} maxLength={160}
               className={textareaCls(!!errors.shortDescription)} />
@@ -289,14 +285,7 @@ export default function EditGigPage() {
 
         <section className="bg-white rounded-xl p-5 space-y-4 border border-gray-100">
           <h2 className="font-semibold text-gray-800">Compensation</h2>
-          <fieldset className="flex gap-4">
-            {(['fixed', 'range', 'negotiable'] as const).map((type) => (
-              <label key={type} className="flex items-center gap-1.5 cursor-pointer text-sm">
-                <input {...register('priceType')} type="radio" value={type} />
-                {type === 'fixed' ? 'Fixed price' : type === 'range' ? 'Price range' : 'Negotiable'}
-              </label>
-            ))}
-          </fieldset>
+          <input {...register('priceType')} type="hidden" value="fixed" />
           {priceType === 'fixed' && (
             <Field label="Price (₾) *" error={errors.priceFixed?.message}>
               <div className="flex items-center gap-2">
@@ -327,56 +316,11 @@ export default function EditGigPage() {
               </div>
             </Field>
           )}
-          {priceType === 'range' && (
-            <div className="flex gap-3 items-start">
-              <Field label="Min (₾) *" error={errors.priceRangeMin?.message}>
-                <input
-                  {...register('priceRangeMin', {
-                    validate: (v) => {
-                      if (!v) return 'Required';
-                      const num = Number(v);
-                      if (isNaN(num)) return 'Must be a number';
-                      if (num > 10000) return 'Max 10,000 ₾';
-                      return true;
-                    },
-                  })}
-                  type="text"
-                  inputMode="numeric"
-                  placeholder="0"
-                  pattern="\d*"
-                  onKeyDown={(e) => {
-                    if (!/[\d]/.test(e.key) && !['Backspace','Delete','Tab','ArrowLeft','ArrowRight'].includes(e.key)) {
-                      e.preventDefault();
-                    }
-                  }}
-                  className={`w-32 ${inputCls(!!errors.priceRangeMin)}`}
-                />
-              </Field>
-              <Field label="Max (₾) *" error={errors.priceRangeMax?.message}>
-                <input
-                  {...register('priceRangeMax', {
-                    validate: (v) => {
-                      if (!v) return 'Required';
-                      const num = Number(v);
-                      if (isNaN(num)) return 'Must be a number';
-                      if (num > 10000) return 'Max 10,000 ₾';
-                      return true;
-                    },
-                  })}
-                  type="text"
-                  inputMode="numeric"
-                  placeholder="0"
-                  pattern="\d*"
-                  onKeyDown={(e) => {
-                    if (!/[\d]/.test(e.key) && !['Backspace','Delete','Tab','ArrowLeft','ArrowRight'].includes(e.key)) {
-                      e.preventDefault();
-                    }
-                  }}
-                  className={`w-32 ${inputCls(!!errors.priceRangeMax)}`}
-                />
-              </Field>
-            </div>
-          )}
+          <Field label="Workers needed *" error={errors.workersNeeded?.message}>
+            <input {...register('workersNeeded')} type="number" min={1} max={100}
+              className={`w-24 ${inputCls(!!errors.workersNeeded)}`} />
+            <p className="text-xs text-gray-400 mt-0.5">Your estimate. You can hire more or fewer.</p>
+          </Field>
         </section>
 
         <section className="bg-white rounded-xl p-5 space-y-4 border border-gray-100">

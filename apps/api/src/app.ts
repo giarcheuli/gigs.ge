@@ -39,6 +39,15 @@ export async function buildApp() {
 
   // ── Error Handler ──
   app.setErrorHandler((error, _request, reply) => {
+    // Matched by name because @gigs/shared may resolve its own zod copy.
+    if (error.name === 'ZodError') {
+      return reply.status(400).send({
+        error: 'Invalid request',
+        statusCode: 400,
+        details: (error as unknown as { issues: unknown }).issues,
+      });
+    }
+
     const statusCode = error.statusCode ?? 500;
     const message = statusCode >= 500 && env.NODE_ENV === 'production'
       ? 'Internal Server Error'

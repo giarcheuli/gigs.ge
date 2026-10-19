@@ -139,5 +139,7 @@ export const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
 export const MAX_DISPUTE_EVIDENCE_FILES = 10;
 export const MAX_SHORT_BIO_LENGTH = 280;
 export const MAX_SHORT_DESCRIPTION_LENGTH = 160;
+export const MAX_GIG_TITLE_LENGTH = 80;
+export const MAX_WORKERS_NEEDED = 100;
 export const MAX_GIG_EXPIRY_DAYS = 30;
 export const ARBITER_FAULT_BLOCK_THRESHOLD = 2;

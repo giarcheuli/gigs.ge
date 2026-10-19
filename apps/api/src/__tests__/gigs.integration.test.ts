@@ -44,6 +44,7 @@ const makeToken = (overrides: Record<string, unknown> = {}) => signAccessToken({
 const draftGig = {
   id: '22222222-2222-2222-2222-222222222222',
   posterId: TEST_USER_ID,
+  title: 'Kitchen sink repair',
   shortDescription: 'Fix kitchen sink',
   longDescription: 'Need a plumber for a quick fix',
   regionId: 1,
@@ -55,6 +56,7 @@ const draftGig = {
   priceRangeMax: null,
   availableFrom: null,
   availableTo: null,
+  workersNeeded: 2,
   status: 'draft',
   visImages: 'verified',
   visPrice: 'public',
@@ -93,7 +95,8 @@ describe('Gigs Routes Integration', () => {
   });
 
   it('allows an email-verified poster with an unverified phone to create a draft gig', async () => {
-    mockDb.insert.mockReturnValueOnce(mockInsertReturning(draftGig));
+    const insert = mockInsertReturning(draftGig);
+    mockDb.insert.mockReturnValueOnce(insert);
 
     const app = await buildApp();
     const response = await app.inject({
@@ -101,6 +104,7 @@ describe('Gigs Routes Integration', () => {
       url: '/api/v1/gigs',
       headers: { authorization: `Bearer ${makeToken({ phoneVerified: false })}` },
       payload: {
+        title: draftGig.title,
         shortDescription: draftGig.shortDescription,
         longDescription: draftGig.longDescription,
         regionId: draftGig.regionId,
@@ -108,11 +112,16 @@ describe('Gigs Routes Integration', () => {
         streetAddress: draftGig.streetAddress,
         priceType: 'fixed',
         priceFixed: draftGig.priceFixed,
+        workersNeeded: 2,
       },
     });
     await app.close();
 
     expect(response.statusCode).toBe(201);
+    expect(insert.values).toHaveBeenCalledWith(expect.objectContaining({
+      title: draftGig.title,
+      workersNeeded: 2,
+    }));
     expect(response.json()).toEqual({
       gig: expect.objectContaining({
         ...draftGig,
@@ -146,6 +155,39 @@ describe('Gigs Routes Integration', () => {
       code: 'EMAIL_VERIFICATION_REQUIRED',
       statusCode: 403,
     });
+  });
+
+  it('rejects a gig without a title and a non-fixed price with 400', async () => {
+    const app = await buildApp();
+    const noTitle = await app.inject({
+      method: 'POST',
+      url: '/api/v1/gigs',
+      headers: { authorization: `Bearer ${makeToken()}` },
+      payload: {
+        shortDescription: draftGig.shortDescription,
+        regionId: draftGig.regionId,
+        priceType: 'fixed',
+        priceFixed: draftGig.priceFixed,
+      },
+    });
+    const negotiable = await app.inject({
+      method: 'POST',
+      url: '/api/v1/gigs',
+      headers: { authorization: `Bearer ${makeToken()}` },
+      payload: {
+        title: draftGig.title,
+        shortDescription: draftGig.shortDescription,
+        regionId: draftGig.regionId,
+        priceType: 'negotiable',
+      },
+    });
+    await app.close();
+
+    expect(noTitle.statusCode).toBe(400);
+    expect(noTitle.json()).toMatchObject({ error: 'Invalid request', statusCode: 400 });
+    expect(negotiable.statusCode).toBe(400);
+    expect(negotiable.json()).toEqual({ error: 'Only fixed-price gigs can be posted for now', statusCode: 400 });
+    expect(mockDb.insert).not.toHaveBeenCalled();
   });
 
   it('allows the poster to update their draft gig', async () => {
