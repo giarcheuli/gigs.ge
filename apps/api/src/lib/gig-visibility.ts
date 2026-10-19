@@ -18,6 +18,7 @@ type VisibleGig = {
   id: string;
   posterId: string;
   priceType: string;
+  visImages?: string;
   visAddress: string;
   visDates: string;
   longDescription: string | null;
@@ -111,5 +112,20 @@ export function presentGig<T extends VisibleGig>(gig: T, context: GigVisibilityC
   };
   delete presented.visPrice;
   delete presented.visCity;
+
+  // The cover photo is public (it is the board thumbnail); the rest follow the poster's images setting.
+  if (Array.isArray(gig.images)) {
+    const images = (gig.images as GigImageRow[]).map(toPublicImage);
+    presented.images = canSee(gig.visImages ?? 'verified', 'images') ? images : images.slice(0, 1);
+  }
   return presented as Omit<T, 'visPrice' | 'visCity'>;
 }
+
+type GigImageRow = { id: string; url: string; thumbUrl: string | null; isPreview: boolean };
+
+const toPublicImage = (image: GigImageRow) => ({
+  id: image.id,
+  url: image.url,
+  thumbUrl: image.thumbUrl ?? image.url,
+  isPreview: image.isPreview,
+});

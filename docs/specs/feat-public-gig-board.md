@@ -16,7 +16,7 @@ Product-owner decisions from 2026-10-19/20. One spec covers four PR-sized slices
 | D8 | Board filters: region, city, price range; newest first; "load more" paging. |
 | D9 | When accepting an applicant, the poster chooses whether to decline the other pending applicants. Declined applicants get a notification. |
 | D10 | A worker may re-apply to a gig **once** after withdrawing. Before a second withdrawal the UI warns that it is final. |
-| D11 | Photos are in the backlog; storage choice (Google Cloud Storage vs Cloudflare R2) is pending. |
+| D11 | Photos: Google Cloud Storage chosen by the owner on 2026-10-20. Delivered in `docs/specs/feat-gig-photos.md`. |
 
 ## Slices
 

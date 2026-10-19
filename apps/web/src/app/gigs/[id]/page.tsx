@@ -27,6 +27,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/lib/auth-context';
 import { apiFetch } from '@/lib/api';
 import { priceLabel as boardPriceLabel } from '@/components/gig-board';
+import type { GigImage } from '@/components/gig-board';
+import { GigGallery, GigPhotoManager } from '@/components/gig-photos';
 import { WORKER_FEE_RATE } from '@gigs/shared/constants';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -38,6 +40,7 @@ interface Gig {
   shortDescription: string;
   longDescription: string | null;
   workersNeeded?: number;
+  images?: GigImage[];
   regionId: number;
   cityId: number | null;
   region?: { id: number; nameEn: string } | null;
@@ -265,6 +268,8 @@ export default function GigDetailPage() {
 
           {gig.title && <p className="text-gray-800 text-sm font-medium">{gig.shortDescription}</p>}
 
+          <GigGallery images={gig.images ?? []} title={gig.title ?? gig.shortDescription} />
+
           {gig.longDescription && (
             <p className="text-gray-700 text-sm whitespace-pre-wrap">{gig.longDescription}</p>
           )}
@@ -318,6 +323,10 @@ export default function GigDetailPage() {
                 </Link>
               )}
             </div>
+
+            {(gig.status === 'draft' || gig.status === 'active') && (
+              <GigPhotoManager gigId={gig.id} images={gig.images ?? []} />
+            )}
 
             <h3 className="text-sm font-medium text-gray-700">
               Applications ({applications.length})

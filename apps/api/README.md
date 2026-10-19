@@ -8,7 +8,7 @@ Fastify backend for gigs.ge — handles auth, gig management, contracts, billing
 - **Framework:** Fastify
 - **ORM:** Drizzle ORM → PostgreSQL 16
 - **Queue:** BullMQ (Redis)
-- **Storage:** Cloudflare R2 (S3-compatible)
+- **Storage:** Google Cloud Storage (gig photos; bucket per environment via `MEDIA_BUCKET`)
 
 ## Quick Start
 
