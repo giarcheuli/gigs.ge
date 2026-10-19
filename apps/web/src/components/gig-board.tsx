@@ -1,0 +1,174 @@
+'use client';
+
+/**
+ * Public gig board, rendered on the homepage for everyone.
+ *
+ * Cards show the short description, location, and price, which are public for every gig.
+ * Opening a gig requires login, so visitors' card links go straight to /login and return to the gig.
+ */
+
+import Link from 'next/link';
+import { useQuery } from '@tanstack/react-query';
+import { useAuth } from '@/lib/auth-context';
+import { apiFetch } from '@/lib/api';
+
+interface Place {
+  id: number;
+  nameEn: string;
+}
+
+export interface BoardGig {
+  id: string;
+  shortDescription: string;
+  regionId: number;
+  region?: Place | null;
+  city?: Place | null;
+  priceType: 'fixed' | 'range' | 'negotiable';
+  priceFixed: string | null;
+  priceRangeMin: string | null;
+  priceRangeMax: string | null;
+  expiresAt: string;
+}
+
+interface MyApplication {
+  gigId: string;
+  status: string;
+}
+
+export function priceLabel(gig: Pick<BoardGig, 'priceType' | 'priceFixed' | 'priceRangeMin' | 'priceRangeMax'>): string {
+  if (gig.priceType === 'fixed' && gig.priceFixed) return `₾ ${gig.priceFixed}`;
+  if (gig.priceType === 'range' && gig.priceRangeMin && gig.priceRangeMax) {
+    return `₾ ${gig.priceRangeMin} – ${gig.priceRangeMax}`;
+  }
+  return 'Negotiable';
+}
+
+export function locationLabel(gig: Pick<BoardGig, 'regionId' | 'region' | 'city'>): string {
+  const region = gig.region?.nameEn ?? `Region ${gig.regionId}`;
+  return gig.city ? `${gig.city.nameEn}, ${region}` : region;
+}
+
+function expiryLabel(expiresAt: string): string {
+  const days = Math.ceil((new Date(expiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+  if (days <= 0) return 'Expired';
+  if (days === 1) return 'Expires tomorrow';
+  return `Expires in ${days} days`;
+}
+
+export function GigBoard() {
+  const { user, loading } = useAuth();
+  const isVerified = Boolean(user?.emailVerified);
+
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['gigs', 'active'],
+    queryFn: async () => {
+      const res = await apiFetch('/gigs');
+      if (!res.ok) throw new Error('Failed to load gigs');
+      const body = (await res.json()) as { data: BoardGig[] };
+      return body.data;
+    },
+  });
+
+  const { data: myApplications = [] } = useQuery<MyApplication[]>({
+    queryKey: ['my-applications'],
+    queryFn: async () => {
+      const res = await apiFetch('/applications/mine');
+      if (!res.ok) return [];
+      const body = (await res.json()) as { data: Array<{ gig: { id: string }; status: string }> };
+      return body.data.map((a) => ({ gigId: a.gig.id, status: a.status }));
+    },
+    enabled: isVerified,
+  });
+
+  const appliedGigIds = new Set(myApplications.map((a) => a.gigId));
+
+  return (
+    <main className="min-h-screen bg-gray-50">
+      <header className="bg-white border-b px-4 py-4 flex items-center justify-between">
+        <Link href="/" className="text-xl font-bold text-brand-700">gigs.ge</Link>
+        <nav className="flex gap-2 text-sm">
+          {isVerified && (
+            <Link
+              href="/gigs/new"
+              className="rounded-lg bg-brand-600 px-4 py-2 font-semibold text-white hover:bg-brand-700 transition-colors"
+            >
+              + Post a gig
+            </Link>
+          )}
+          {user ? (
+            <Link href="/account" className="px-3 py-2 text-gray-600 hover:text-brand-600 transition-colors">
+              My account
+            </Link>
+          ) : !loading && (
+            <>
+              <Link href="/login" className="px-3 py-2 text-gray-600 hover:text-brand-600 transition-colors">
+                Sign in
+              </Link>
+              <Link
+                href="/register"
+                className="rounded-lg bg-brand-600 px-4 py-2 font-semibold text-white hover:bg-brand-700 transition-colors"
+              >
+                Create account
+              </Link>
+            </>
+          )}
+        </nav>
+      </header>
+
+      <div className="max-w-2xl mx-auto px-4 py-8">
+        <h1 className="text-2xl font-bold text-gray-900">Available gigs</h1>
+        {!loading && !user && (
+          <p className="mt-1 mb-6 text-sm text-gray-500">Sign in to see full details and apply.</p>
+        )}
+        {(loading || user) && <div className="mb-6" />}
+
+        {isLoading && (
+          <div className="space-y-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="bg-white rounded-xl p-5 animate-pulse h-28" />
+            ))}
+          </div>
+        )}
+
+        {isError && <p className="text-red-600 text-sm">Failed to load gigs. Please refresh.</p>}
+
+        {data && data.length === 0 && (
+          <div className="text-center py-16 text-gray-500">
+            <p className="text-lg font-medium mb-2">No gigs posted yet</p>
+            {isVerified && (
+              <Link href="/gigs/new" className="text-brand-600 hover:underline text-sm">
+                Be the first to post one →
+              </Link>
+            )}
+          </div>
+        )}
+
+        {data && data.length > 0 && (
+          <div className="space-y-3">
+            {data.map((gig) => (
+              <Link
+                key={gig.id}
+                href={user ? `/gigs/${gig.id}` : `/login?next=${encodeURIComponent(`/gigs/${gig.id}`)}`}
+                className="block bg-white rounded-xl p-5 border border-gray-100 hover:border-brand-200 hover:shadow-sm transition-all"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <p className="font-semibold text-gray-900 line-clamp-2">{gig.shortDescription}</p>
+                  {appliedGigIds.has(gig.id) && (
+                    <span className="shrink-0 rounded-full bg-yellow-100 px-2 py-1 text-xs font-medium text-yellow-700 whitespace-nowrap">
+                      ✓ Applied
+                    </span>
+                  )}
+                </div>
+                <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-gray-500">
+                  <span>📍 {locationLabel(gig)}</span>
+                  <span className="font-medium text-brand-700">{priceLabel(gig)}</span>
+                  <span className="ml-auto text-xs">{expiryLabel(gig.expiresAt)}</span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
+    </main>
+  );
+}

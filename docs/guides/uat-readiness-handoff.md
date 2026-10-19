@@ -6,7 +6,7 @@
 
 1. **Register and verify by email.** A real 6-digit code arrives from `noreply@gigs.ge` (valid 15 minutes; resend after 60 seconds). Phone is collected but its verification is optional.
 2. **Reset a forgotten password** through an emailed single-use link.
-3. **Browse gigs** without an account. Contact details and restricted fields are hidden by the API, not just by the UI.
+3. **Browse gigs on the homepage** without an account: short description, city, and price are public. Opening a gig requires login; street address and contact details stay hidden by the API, not just by the UI.
 4. **Post, edit, and publish a gig** (fixed price only in this release).
 5. **Apply to a gig; the poster accepts**, and a contract draft is created.
 6. **Sign the contract** (both parties) and see it move to `in_progress`.

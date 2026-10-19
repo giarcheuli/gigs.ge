@@ -54,8 +54,6 @@ const gigFormSchema = z
     availableFrom: z.string().optional(),
     availableTo: z.string().optional(),
     visImages: z.enum(VIS_OPTS).optional(),
-    visPrice: z.enum(VIS_OPTS).optional(),
-    visCity: z.enum(VIS_OPTS).optional(),
     visAddress: z.enum(VIS_OPTS).optional(),
     visContact: z.enum(VIS_OPTS).optional(),
     visDates: z.enum(VIS_OPTS).optional(),
@@ -117,8 +115,6 @@ export default function NewGigPage() {
       availableFrom: toDatetimeLocal(now),
       availableTo: toDatetimeLocal(plus24h),
       visImages: 'verified',
-      visPrice: 'public',
-      visCity: 'verified',
       visAddress: 'on_request',
       visContact: 'on_request',
       visDates: 'verified',
@@ -168,8 +164,6 @@ export default function NewGigPage() {
             ? new Date(data.availableTo).toISOString()
             : undefined,
           visImages: data.visImages,
-          visPrice: data.visPrice,
-          visCity: data.visCity,
           visAddress: data.visAddress,
           visContact: data.visContact,
           visDates: data.visDates,
@@ -451,8 +445,6 @@ export default function NewGigPage() {
 
 const VIS_FIELD_CONFIG = [
   { key: 'visImages', label: 'Images', defaultVal: 'verified' },
-  { key: 'visPrice', label: 'Price', defaultVal: 'public' },
-  { key: 'visCity', label: 'City', defaultVal: 'verified' },
   { key: 'visAddress', label: 'Street address', defaultVal: 'on_request' },
   { key: 'visContact', label: 'Contact info', defaultVal: 'on_request' },
   { key: 'visDates', label: 'Available dates', defaultVal: 'verified' },

@@ -199,8 +199,14 @@ describe('Gigs Routes Integration', () => {
     });
   });
 
-  it('lists and fetches only visible gigs', async () => {
-    const visibleGigs = [{ ...draftGig, status: 'active' }];
+  it('lists gigs publicly with city and price, and requires login for detail', async () => {
+    const visibleGigs = [{
+      ...draftGig,
+      status: 'active',
+      region: { id: 1, nameEn: 'Tbilisi' },
+      city: { id: 2, nameEn: 'Tbilisi' },
+    }];
+    const viewerToken = makeToken({ sub: '33333333-3333-3333-3333-333333333333', emailVerified: false });
 
     mockDb.query.gigs.findMany.mockResolvedValueOnce(visibleGigs);
     mockDb.query.gigs.findFirst
@@ -214,35 +220,52 @@ describe('Gigs Routes Integration', () => {
       url: '/api/v1/gigs',
     });
 
+    const anonymousDetail = await app.inject({
+      method: 'GET',
+      url: `/api/v1/gigs/${draftGig.id}`,
+    });
+
     const getResponse = await app.inject({
       method: 'GET',
       url: `/api/v1/gigs/${draftGig.id}`,
+      headers: { authorization: `Bearer ${viewerToken}` },
     });
 
     const notFoundResponse = await app.inject({
       method: 'GET',
       url: '/api/v1/gigs/33333333-3333-3333-3333-333333333333',
+      headers: { authorization: `Bearer ${viewerToken}` },
     });
 
     await app.close();
 
     expect(listResponse.statusCode).toBe(200);
-    expect(listResponse.json().data[0]).toMatchObject({
+    const listed = listResponse.json().data[0];
+    expect(listed).toMatchObject({
       shortDescription: visibleGigs[0].shortDescription,
       longDescription: null,
       priceFixed: visibleGigs[0].priceFixed,
-      cityId: null,
+      cityId: visibleGigs[0].cityId,
+      city: { id: 2, nameEn: 'Tbilisi' },
+      region: { id: 1, nameEn: 'Tbilisi' },
       streetAddress: null,
       availableFrom: null,
       availableTo: null,
     });
-    expect(listResponse.json().data[0].streetAddress).not.toBe(visibleGigs[0].streetAddress);
+    expect(listed).not.toHaveProperty('visPrice');
+    expect(listed).not.toHaveProperty('visCity');
+    expect(mockDb.query.gigs.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      with: { region: true, city: true },
+    }));
+
+    expect(anonymousDetail.statusCode).toBe(401);
 
     expect(getResponse.statusCode).toBe(200);
     expect(getResponse.json()).toMatchObject({
       gig: expect.objectContaining({
-        longDescription: null,
-        cityId: null,
+        longDescription: visibleGigs[0].longDescription,
+        cityId: visibleGigs[0].cityId,
+        priceFixed: visibleGigs[0].priceFixed,
         streetAddress: null,
       }),
     });

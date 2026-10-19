@@ -74,8 +74,6 @@ export interface Gig {
   availableTo: string | null;
   status: GigStatus;
   visImages: VisibilityLevel;
-  visPrice: VisibilityLevel;
-  visCity: VisibilityLevel;
   visAddress: VisibilityLevel;
   visContact: VisibilityLevel;
   visDates: VisibilityLevel;
