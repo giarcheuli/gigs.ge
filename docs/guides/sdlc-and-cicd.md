@@ -101,36 +101,39 @@ what is current work.
 
 ## Branch Protection Rules
 
-Apply these settings in GitHub → Settings → Branches.
+Protection is configured as GitHub **rulesets** (Settings → Rules → Rulesets): `Protect dev` and `Protect main`. Both apply the same rules:
 
-### `main`
-- Require pull request before merging (no direct pushes)
-- Require ≥ 1 approving review
-- Require status checks to pass: `lint`, `test`, `build`
+- Require a pull request before merging (no direct pushes); 0 approvals while the team is one person
+- Require the `build-and-test` status check to pass
 - Block force pushes
 - Block deletions
+
+The required check is what makes "don't merge a red build" automatic. Before it existed (until 2026-10-19), only GitGuardian ran on PRs, so a failing test could still be merged.
 
 ---
 
 ## CI Pipeline
 
 CI runs automatically on every PR targeting `dev` or `main`.
-The pipeline lives in `.github/workflows/ci.yml`.
+The pipeline lives in `.github/workflows/ci.yml` as one job, `build-and-test`:
 
 ```
 PR opened or updated
   │
-  ├── lint    pnpm --filter @gigs/api lint
-  ├── test    pnpm --filter @gigs/api test
-  └── build   pnpm --filter @gigs/api build
+  ├── install    pnpm install --frozen-lockfile
+  ├── shared     pnpm --filter @gigs/shared build
+  ├── typecheck  pnpm --filter @gigs/api lint   (tsc --noEmit)
+  ├── test       pnpm --filter @gigs/api test
+  ├── web        pnpm --filter @gigs/web build
+  └── admin      pnpm --filter @gigs/admin build
 ```
 
-A PR cannot be merged if any step fails. This is enforced by branch protection, not by convention.
+One job instead of several keeps the required-check list to a single name and avoids installing dependencies three times. A PR cannot be merged if any step fails; the ruleset enforces this.
 
 ### Test Details
 
-- All existing Jest tests must pass — no force-merging past a red test suite.
-- Integration tests run against a throwaway PostgreSQL instance provisioned by CI.
+- All existing Jest tests must pass; there is no force-merging past a red test suite.
+- API "integration" tests run the real Fastify app with a mocked database (`jest.mock('../db/index.js')`), so CI needs no PostgreSQL or Redis. Tests that hit a real database are a future item (see the [improvement plan](../planning/improvement-plan.md)).
 - Coverage thresholds are not enforced yet; this is a post-launch hardening item.
 
 ---

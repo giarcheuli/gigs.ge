@@ -2,18 +2,25 @@
 
 Prioritized next steps after the [2026-10-19 status review](../status/2026-10-19-project-status.md). The backlog of record is [backlog.json](../backlog.json); this page explains the **order** and the **why**.
 
-Ordering principle: protect what exists (data, secrets, merge quality) first, then finish the features that make contracts trustworthy, then money and media, then launch hardening.
+Ordering principle (revised 2026-10-19 by the product owner): **user-facing product first.** Merge quality is protected by the CI gate; infrastructure hardening waits until the product is closer to launch.
 
-## Now: safety net (small, high leverage)
+## Done
 
-| # | Item | Why it matters | Owner |
-|---|------|----------------|-------|
-| 1 | **CI test gate on PRs.** GitHub Actions workflow running build + API tests on every PR to `dev`/`main`, required before merge | Today a failing test does not block a merge; it only shows up after deploy | Agent |
-| 2 | **UAT database backups** (daily, 7-day retention) | Stakeholder test data has no restore path. Cost is a few cents per month at this size | Owner approves, agent enables |
-| 3 | **Least-privilege deploy identity.** Dedicated deployer and web-runtime service accounts; remove **Editor** from the default compute account; drop the unused Cloud Build account's project-wide secret access | Editor can change almost anything in the project, and every deploy runs with it | Agent (one supervised change) |
-| 4 | **Remove UAT-instance leftovers** (`gigsge_dev` DB, `gigsge_dev_app` login), and give UAT a dedicated DB owner instead of `postgres`, in one SQL session | Smaller blast radius if the UAT password ever leaks | Agent prepares SQL; owner runs it in Cloud SQL Studio |
-| 5 | **Dedicated UAT Resend key** | Today revoking the dev key also breaks UAT email | Owner creates the key in Resend; agent swaps it |
-| 6 | **Container image cleanup policy** (keep the last 10 per service; delete the retired `api`/`web` image names) | Storage cost creeps up, and old images clutter rollback choices | Agent, after owner OK (deletion is permanent) |
+| # | Item | Result |
+|---|------|--------|
+| 1 | **CI test gate on PRs** | `.github/workflows/ci.yml` runs typecheck, API tests, and web/admin builds on every PR to `dev`/`main`; `build-and-test` is a required check in both rulesets |
+
+## Deferred by owner decision (2026-10-19)
+
+Dev and UAT hold only disposable test data that can be re-seeded, so protecting it is not a priority now. Revisit before production exists.
+
+| # | Item | Revisit when |
+|---|------|--------------|
+| 2 | UAT database backups | Production setup (#14); production gets backups from day one |
+| 3 | Least-privilege deploy identity (remove **Editor** from the default compute account) | Production setup (#14) |
+| 4 | Remove UAT-instance leftovers; dedicated UAT DB owner | Any convenient SQL session |
+| 5 | Dedicated UAT Resend key | When the dev key is next rotated |
+| 6 | Container image cleanup policy | When storage cost becomes noticeable |
 
 ## Next: finish the deal lifecycle (milestone M2)
 
