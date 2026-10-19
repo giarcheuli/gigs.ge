@@ -4,21 +4,24 @@ A minimalistic, mobile-first gig board for Georgia — post short-term jobs or a
 
 ## Documentation
 
-- [**System Design Document**](./SYSTEM_DESIGN.md) — architecture, data models, API design, feature requirements, security model and next steps. Start here before building anything.
-- [**Branching and SDLC Guide**](./docs/guides/branching-and-sdlc.md) — canonical branch roles, delivery workflow, and agent-safe operating rules for the first UAT slice.
-- [**UAT Readiness Handoff**](./docs/guides/uat-readiness-handoff.md) — current implementation state, UAT blockers, and the fastest credible path forward.
-- [**Custom AI Agents**](./docs/guides/custom-ai-agents.md) — proposed workspace agents for UAT orchestration, backend delivery, testing, frontend slices, documentation, and release risk review.
-- [**Agent Skills Map**](./docs/guides/agent-skills-map.md) — which project documents each active agent should consult first.
-- [**Agent Sessions Quick Start**](./.github/agents/QUICKSTART.md) — how to invoke and use custom agents with session management.
+- [**Documentation Index**](./docs/README.md): where every doc lives and where new ones go. Start here.
+- [**System Design Document**](./SYSTEM_DESIGN.md): architecture, data models, API design, feature requirements, and the security model.
+- [**UAT Readiness Handoff**](./docs/guides/uat-readiness-handoff.md): what testers can do today and what is not built yet.
+- [**Improvement Plan**](./docs/planning/improvement-plan.md): ordered next steps.
+- [**Branching and SDLC Guide**](./docs/guides/branching-and-sdlc.md): branch roles (`dev` → `main`), the delivery workflow, and agent-safe rules.
+- [**Cloud Inventory**](./docs/operations/cloud-inventory.md): what runs where in Google Cloud.
+- [**Custom AI Agents**](./docs/guides/custom-ai-agents.md) and [**Agent Skills Map**](./docs/guides/agent-skills-map.md): how the workspace agents are designed and what they read.
+- [**Agent Sessions Quick Start**](./.github/agents/QUICKSTART.md): how to invoke the custom agents.
 
 ## Overview
 
 - Two user roles: **admin** and **user**
 - Privacy-first: contact info is never exposed until both parties trust each other
-- Full verification required (email + phone OTP) before posting or applying
+- Email verification required before posting or applying; phone is collected but its verification is optional
 - Georgian regions & cities built-in; mobile-first PWA
 
 ## Status
 
-Early implementation — backend auth, gigs, applications, and contracts (minimum signing flow) are mounted, but stakeholder user journeys are not yet wired end-to-end in web/admin. See [SYSTEM_DESIGN.md](./SYSTEM_DESIGN.md) for the target design and [docs/guides/uat-readiness-handoff.md](./docs/guides/uat-readiness-handoff.md) for the current delivery state.
-Current workflow policy: use a single canonical integration branch for the first UAT slice and branch all short-lived work from it. See [docs/guides/branching-and-sdlc.md](./docs/guides/branching-and-sdlc.md).
+Live on two environments: **dev** (https://dev.gigs.ge, from branch `dev`) and **UAT** (https://uat.gigs.ge, from branch `main`). Testers can register with real email verification, post and apply to gigs, sign contracts, and cancel by mutual agreement. Contract timers, disputes/arbitration, billing, uploads, and the admin app are not built yet. See the [UAT Readiness Handoff](./docs/guides/uat-readiness-handoff.md) for details and the [Improvement Plan](./docs/planning/improvement-plan.md) for what comes next.
+
+Workflow: branch from `dev`, merge back to `dev` by PR, verify on dev.gigs.ge, then promote `dev` → `main`. See [docs/guides/branching-and-sdlc.md](./docs/guides/branching-and-sdlc.md).
