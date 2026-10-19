@@ -74,7 +74,7 @@ Email jobs use Cloud Tasks. Enable the Cloud Tasks API and create `auth-email-de
 
 ---
 
-**Environment isolation update:** Dev and UAT run on separate Cloud SQL instances (`gigsge-dev-db` and `gigsge-uat-db`), so a dev login cannot reach UAT data. Each instance has its own app login (`gigsge_dev_app`, `gigsge_uat_app`) whose password lives in `db-password-dev` or `db-password-uat`. Use separate `jwt-access-secret-*`, `jwt-refresh-secret-*`, and `resend-api-key-*` secrets, plus separate runtime service accounts, queues, and trigger substitutions for dev and UAT. The earlier Resend-only deployment note does not cover these required isolation settings.
+**Environment isolation update:** Dev and UAT run on separate Cloud SQL instances (`gigsge-dev-db` and `gigsge-uat-db`), so a dev login cannot reach UAT data. Each instance has its own login (`gigsge_dev_app` on dev, `postgres` on UAT) whose password lives in `db-password-dev` or `db-password-uat`. Use separate `jwt-access-secret-*`, `jwt-refresh-secret-*`, and `resend-api-key-*` secrets, plus separate runtime service accounts, queues, and trigger substitutions for dev and UAT. The earlier Resend-only deployment note does not cover these required isolation settings.
 
 ## 3. Database setup
 
@@ -85,7 +85,7 @@ Email jobs use Cloud Tasks. Enable the Cloud Tasks API and create `auth-email-de
 We first tried to isolate dev and UAT inside one shared instance by changing database owners and revoking `CONNECT`. Cloud SQL blocks that: its `postgres` user is not a true superuser, so it cannot reliably reassign or drop databases owned by `cloudsqlsuperuser` or undo grants it did not make. A separate instance per environment gives a hard boundary instead.
 
 - **Dev:** instance `gigsge-dev-db` (PostgreSQL 16, Enterprise, `db-f1-micro`, 10 GB HDD, zonal, no backups, deletion protection on). Database `gigsge_dev`, login `gigsge_dev_app`.
-- **UAT:** instance `gigsge-uat-db`, database `gigsge`, login `gigsge_uat_app`.
+- **UAT:** instance `gigsge-uat-db`, database `gigsge`, login `postgres`. The existing UAT tables are owned by `postgres`, and a new login could not alter them without an interactive SQL session to transfer ownership. Because the instance now holds only UAT data, the API keeps `postgres` with a rotated password stored in `db-password-uat`. Moving UAT to a dedicated `gigsge_uat_app` owner is a follow-up.
 
 Create each login with `gcloud sql users create` and a generated password. Write the password straight into Secret Manager (`db-password-dev` / `db-password-uat`) without printing it, and never put it in Cloud Build substitutions. Cloud SQL gives new logins the `cloudsqlsuperuser` role by default. That is acceptable because each instance holds only one environment's data. The API's schema push and UAT seed run as that login when the container starts.
 
@@ -93,9 +93,11 @@ Create each login with `gcloud sql users create` and a generated password. Write
 
 ### Environment substitutions and secrets
 
-Create the dedicated API runtime accounts `gigsge-api-dev-runtime@gigsge.iam.gserviceaccount.com` and `gigsge-api-uat-runtime@gigsge.iam.gserviceaccount.com`. Grant each Cloud SQL Client on the project, Secret Manager Secret Accessor only on its four secrets (`db-password-*`, `jwt-access-secret-*`, `jwt-refresh-secret-*`, and `resend-api-key-*`), and Cloud Tasks Enqueuer only on its queue. Grant the Cloud Build service account Service Account User on both runtime accounts.
+Create the dedicated API runtime accounts `gigsge-api-dev-runtime@gigsge.iam.gserviceaccount.com` and `gigsge-api-uat-runtime@gigsge.iam.gserviceaccount.com`. Grant each Cloud SQL Client on the project, Secret Manager Secret Accessor only on its four secrets (`db-password-*`, `jwt-access-secret-*`, `jwt-refresh-secret-*`, and `resend-api-key-*`), and Cloud Tasks Enqueuer only on its queue. Both deploy triggers run as the default compute account `723467137798-compute@developer.gserviceaccount.com`, not the Cloud Build account, so grant that account Service Account User on both runtime accounts.
 
-Set trigger substitutions independently. Dev uses `_DB_INSTANCE=gigsge-dev-db`, `_DB_NAME=gigsge_dev`, `_DB_USER=gigsge_dev_app`, `_DB_PASSWORD_SECRET=db-password-dev`, `_JWT_ACCESS_SECRET_NAME=jwt-access-secret-dev`, `_JWT_REFRESH_SECRET_NAME=jwt-refresh-secret-dev`, `_RESEND_API_SECRET=resend-api-key-dev`, `_AUTH_EMAIL_QUEUE=auth-email-dev`, and `_API_RUNTIME_SERVICE_ACCOUNT=gigsge-api-dev-runtime@gigsge.iam.gserviceaccount.com`. UAT uses `_DB_INSTANCE=gigsge-uat-db`, `_DB_NAME=gigsge`, `_DB_USER=gigsge_uat_app`, and the `-uat` secrets, `auth-email-uat` queue, and `gigsge-api-uat-runtime@gigsge.iam.gserviceaccount.com` identity. Keep the existing API/frontend URL substitutions for each environment.
+**Temporary shared Resend key:** `resend-api-key-uat` currently holds a copy of the dev key, because the dev key is send-only and cannot create new keys. To separate them, create a sending-access key for `gigs.ge` in Resend and add it as a new version of `resend-api-key-uat`. The next UAT deploy picks it up (`:latest`).
+
+Set trigger substitutions independently. Dev uses `_DB_INSTANCE=gigsge-dev-db`, `_DB_NAME=gigsge_dev`, `_DB_USER=gigsge_dev_app`, `_DB_PASSWORD_SECRET=db-password-dev`, `_JWT_ACCESS_SECRET_NAME=jwt-access-secret-dev`, `_JWT_REFRESH_SECRET_NAME=jwt-refresh-secret-dev`, `_RESEND_API_SECRET=resend-api-key-dev`, `_AUTH_EMAIL_QUEUE=auth-email-dev`, and `_API_RUNTIME_SERVICE_ACCOUNT=gigsge-api-dev-runtime@gigsge.iam.gserviceaccount.com`. UAT uses `_DB_INSTANCE=gigsge-uat-db`, `_DB_NAME=gigsge`, `_DB_USER=postgres`, and the `-uat` secrets, `auth-email-uat` queue, and `gigsge-api-uat-runtime@gigsge.iam.gserviceaccount.com` identity. Keep the existing API/frontend URL substitutions for each environment.
 
 Remove the old `_DB_PASSWORD`, `_JWT_ACCESS_SECRET`, and `_JWT_REFRESH_SECRET` substitutions after the new Secret Manager versions are configured. Their values are no longer used and should not remain in the trigger.
 
@@ -106,7 +108,7 @@ Set these values explicitly in each trigger; Cloud Build now rejects missing val
 | Trigger | API service | Web service | Database | Database user | SQL instance |
 |---------|-------------|-------------|----------|---------------|--------------|
 | Dev | `gigsge-api-dev` | `gigsge-web-dev` | `gigsge_dev` | `gigsge_dev_app` | `gigsge-dev-db` |
-| UAT | `gigsge-api` | `gigsge-web` | `gigsge` | `gigsge_uat_app` | `gigsge-uat-db` |
+| UAT | `gigsge-api` | `gigsge-web` | `gigsge` | `postgres` | `gigsge-uat-db` |
 
 Also set `_API_RUNTIME_SERVICE_ACCOUNT`, `_DB_PASSWORD_SECRET`, `_JWT_ACCESS_SECRET_NAME`, `_JWT_REFRESH_SECRET_NAME`, `_RESEND_API_SECRET`, `_AUTH_EMAIL_QUEUE`, `_API_URL`, and `_FRONTEND_URL` to the matching environment values. Dev and UAT use separate SQL instances, DB users, and credentials.
 

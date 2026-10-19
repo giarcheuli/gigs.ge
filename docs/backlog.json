@@ -1,9 +1,9 @@
 {
   "meta": {
-    "updatedAt": "2026-10-14",
+    "updatedAt": "2026-10-19",
     "goal": "Complete the trust-critical marketplace flows and make business rules configurable before public soft launch.",
     "repoState": "development_active",
-    "summary": "Dev and UAT Cloud Run environments are live. Email-only access (PR #17), mutual cancellation (PR #19), and server-side gig visibility enforcement (PR #21) are deployed to dev. Live public API check found no restricted gig values in the tested response; six health checks passed. Production email delivery remains required before public signup. Remaining gaps include contract timers, evidence/arbitration, billing, admin operations, and uploads. Configurable-settings backend work remains unmerged on feat/configurable-contract-settings. Guides/FAQ are postponed; fixed-price only remains initial scope and range/negotiable contracts are pinned for early post-release."
+    "summary": "Dev and UAT Cloud Run environments are live. Email-only access (PR #17), mutual cancellation (PR #19), server-side gig visibility enforcement (PR #21), and production email delivery through Resend (PR #23) are deployed to dev. Live public API check found no restricted gig values in the tested response; six health checks passed. Real-mailbox verification and password-reset emails work on dev. Remaining gaps include contract timers, evidence/arbitration, billing, admin operations, and uploads. Configurable-settings backend work remains unmerged on feat/configurable-contract-settings. Guides/FAQ are postponed; fixed-price only remains initial scope and range/negotiable contracts are pinned for early post-release."
   },
   "milestones": [
     {
@@ -159,9 +159,10 @@
     {
       "task": "Implement production email delivery for verification OTP and password reset, including delivery failures and resend/expiry handling.",
       "priority": "high",
-      "status": "not_started",
+      "status": "done",
       "phase": "m4_hardening",
-      "notes": "Email delivery is required before public sign-up. SMS provider/phone verification is optional and is not a launch blocker under the 2026-10-14 product decision."
+      "completedAt": "2026-10-19",
+      "notes": "Delivered in PR #23 (see the provider-integration item below). SMS provider/phone verification is optional and is not a launch blocker under the 2026-10-14 product decision."
     },
     {
       "task": "Replace unilateral contract cancellation with a mutual request/accept/decline/withdraw workflow, including audit history, notifications, UI states, concurrency handling, and lifecycle regression tests.",
@@ -225,9 +226,10 @@
     {
       "task": "Integrate a production email provider for email verification and password reset (currently delivery is stubbed). Phone SMS is optional and not required for release.",
       "priority": "high",
-      "status": "in_progress",
+      "status": "done",
       "phase": "m4_hardening",
-      "notes": "Implementation is on feat/resend-email-delivery: Resend auth delivery through encrypted, signed Cloud Tasks jobs; atomic single-use reset tokens; shared Postgres HMAC-IP limiting with timing padding; and minimal reset screens. Before dev rollout, provision gigsge_dev_app/gigsge_uat_app as isolated DB owners, separate DB/JWT/Resend Secret Manager secrets, the auth-email-dev queue, per-environment runtime service accounts with scoped roles, and explicit trigger substitutions. Cloud Build fails closed when any environment value is missing."
+      "completedAt": "2026-10-19",
+      "notes": "Deployed to dev in PR #23 and verified with a real mailbox (verification code and password reset). Resend delivery runs through encrypted, signed Cloud Tasks jobs, with atomic single-use reset tokens, shared Postgres HMAC-IP limiting with timing padding, and minimal reset screens. Dev runs on its own Cloud SQL instance (gigsge-dev-db); each environment has its own DB/JWT secrets, queue, and runtime service account. Follow-ups: give UAT its own Resend key (it currently copies dev's) and a dedicated DB owner instead of postgres. See docs/guides/uat-runbook.md section 3."
     },
     {
       "task": "Add end-to-end tests for user flows (e.g., gig poster creating a gig, worker applying, contract completion).",
