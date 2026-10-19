@@ -220,7 +220,11 @@ export async function gigsRoutes(app: FastifyInstance) {
       where: and(...conditions),
       orderBy: [desc(createdAtMs), desc(gigs.id)],
       limit: query.limit + 1,
-      with: { region: true, city: true },
+      with: {
+        region: true,
+        city: true,
+        images: { orderBy: (image, { asc, desc: descending }) => [descending(image.isPreview), asc(image.sortOrder)], limit: 1 },
+      },
     });
 
     const page = rows.slice(0, query.limit);
@@ -237,7 +241,11 @@ export async function gigsRoutes(app: FastifyInstance) {
 
     const gig = await db.query.gigs.findFirst({
       where: eq(gigs.id, params.id),
-      with: { region: true, city: true },
+      with: {
+        region: true,
+        city: true,
+        images: { orderBy: (image, { asc, desc: descending }) => [descending(image.isPreview), asc(image.sortOrder)] },
+      },
     });
 
     if (!gig) {

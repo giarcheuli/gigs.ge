@@ -8,8 +8,9 @@
  * Flow:
  *  1. User fills form and clicks "Post Gig".
  *  2. POST /api/v1/gigs → creates DRAFT.
- *  3. POST /api/v1/gigs/:id/publish → makes it ACTIVE.
- *  4. Redirect to /gigs/:id.
+ *  3. POST /api/v1/gigs/:id/images → uploads each chosen photo (first = cover).
+ *  4. POST /api/v1/gigs/:id/publish → makes it ACTIVE.
+ *  5. Redirect to /gigs/:id (or show which photos failed, with a link to the live gig).
  *
  * Shows the full visibility-toggle section so stakeholders can see
  * the field-level privacy model during UAT.
@@ -24,7 +25,8 @@ import { z } from 'zod';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/lib/auth-context';
 import { apiFetch } from '@/lib/api';
-import { POSTER_FEE_RATE } from '@gigs/shared/constants';
+import { PHOTO_ACCEPT, uploadGigPhoto } from '@/components/gig-photos';
+import { MAX_GIG_IMAGES, POSTER_FEE_RATE } from '@gigs/shared/constants';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -73,6 +75,8 @@ export default function NewGigPage() {
   const { user, loading } = useAuth();
   const [serverError, setServerError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [photos, setPhotos] = useState<File[]>([]);
+  const [postedGigId, setPostedGigId] = useState<string | null>(null);
 
   // Guard: must be verified
   useEffect(() => {
@@ -163,7 +167,14 @@ export default function NewGigPage() {
 
       const gigId = createBody.gig!.id;
 
-      // Step 2: publish
+      // Step 2: photos (while still a draft, so the gig goes live with its cover)
+      const photoErrors: string[] = [];
+      for (const file of photos) {
+        const error = await uploadGigPhoto(gigId, file);
+        if (error) photoErrors.push(error);
+      }
+
+      // Step 3: publish
       const publishRes = await apiFetch(`/gigs/${gigId}/publish`, { method: 'POST' });
 
       if (!publishRes.ok) {
@@ -173,6 +184,12 @@ export default function NewGigPage() {
           if (errBody.error) errMsg = `Publish failed: ${errBody.error}`;
         } catch { /* ignore */ }
         setServerError(errMsg);
+        return;
+      }
+
+      if (photoErrors.length > 0) {
+        setPostedGigId(gigId);
+        setServerError(`Your gig is live, but some photos could not be added (${photoErrors.join('; ')}). You can add photos from the gig page.`);
         return;
       }
 
@@ -203,6 +220,9 @@ export default function NewGigPage() {
         {serverError && (
           <p role="alert" className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">
             {serverError}
+            {postedGigId && (
+              <Link href={`/gigs/${postedGigId}`} className="ml-1 font-medium underline">Open your gig →</Link>
+            )}
           </p>
         )}
 
@@ -346,6 +366,46 @@ export default function NewGigPage() {
           </p>
         </section>
 
+        {/* ── Photos ── */}
+        <section className="bg-white rounded-xl p-5 space-y-3 border border-gray-100">
+          <h2 className="font-semibold text-gray-800">Photos</h2>
+          <p className="text-xs text-gray-500">
+            Optional, up to {MAX_GIG_IMAGES}. The first photo is the cover shown on the board. Location data is removed.
+          </p>
+          {photos.length > 0 && (
+            <ul className="grid grid-cols-3 gap-3 sm:grid-cols-5">
+              {photos.map((file, i) => (
+                <li key={`${file.name}-${file.lastModified}-${i}`} className="space-y-1">
+                  <PhotoPreview file={file} />
+                  <button
+                    type="button"
+                    onClick={() => setPhotos((prev) => prev.filter((_, j) => j !== i))}
+                    className="text-xs text-red-600 hover:underline"
+                  >
+                    Remove
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {photos.length < MAX_GIG_IMAGES && (
+            <label className="inline-block cursor-pointer text-sm text-brand-600 hover:underline">
+              + Add photos
+              <input
+                type="file"
+                accept={PHOTO_ACCEPT}
+                multiple
+                className="sr-only"
+                onChange={(event) => {
+                  const files = Array.from(event.target.files ?? []);
+                  event.target.value = '';
+                  setPhotos((prev) => [...prev, ...files].slice(0, MAX_GIG_IMAGES));
+                }}
+              />
+            </label>
+          )}
+        </section>
+
         {/* ── Visibility ── */}
         <section className="bg-white rounded-xl p-5 space-y-3 border border-gray-100">
           <h2 className="font-semibold text-gray-800">Field visibility</h2>
@@ -373,7 +433,7 @@ export default function NewGigPage() {
 
         <button
           type="submit"
-          disabled={isSubmitting}
+          disabled={isSubmitting || Boolean(postedGigId)}
           className="w-full rounded-lg bg-brand-600 px-4 py-3 font-semibold text-white hover:bg-brand-700 disabled:opacity-60 transition-colors"
         >
           {isSubmitting ? 'Posting…' : 'Post gig'}
@@ -386,13 +446,25 @@ export default function NewGigPage() {
 // ── Visibility field config ────────────────────────────────────────────────────
 
 const VIS_FIELD_CONFIG = [
-  { key: 'visImages', label: 'Images', defaultVal: 'verified' },
+  { key: 'visImages', label: 'Extra photos (cover is public)', defaultVal: 'verified' },
   { key: 'visAddress', label: 'Street address', defaultVal: 'on_request' },
   { key: 'visContact', label: 'Contact info', defaultVal: 'on_request' },
   { key: 'visDates', label: 'Available dates', defaultVal: 'verified' },
 ] as const;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+function PhotoPreview({ file }: { file: File }) {
+  const [src, setSrc] = useState<string | null>(null);
+  useEffect(() => {
+    const url = URL.createObjectURL(file);
+    setSrc(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+  if (!src) return <div className="aspect-square w-full rounded-md bg-gray-100" />;
+  // eslint-disable-next-line @next/next/no-img-element -- local preview of a file not yet uploaded
+  return <img src={src} alt="" className="aspect-square w-full rounded-md object-cover bg-gray-100" />;
+}
 
 function Field({
   label,

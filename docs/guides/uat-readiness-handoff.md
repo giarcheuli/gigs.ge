@@ -1,23 +1,23 @@
 # UAT Readiness Handoff
 
-**Last updated: 2026-10-19.** The current state of what stakeholders can test, what is missing, and where to look next. Agents and the session validator read this file, so keep its path stable and update it at each promotion to UAT.
+**Last updated: 2026-10-20.** The current state of what stakeholders can test, what is missing, and where to look next. Agents and the session validator read this file, so keep its path stable and update it at each promotion to UAT.
 
 ## What a tester can do today (https://uat.gigs.ge)
 
 1. **Register and verify by email.** A real 6-digit code arrives from `noreply@gigs.ge` (valid 15 minutes; resend after 60 seconds). Phone is collected but its verification is optional.
 2. **Reset a forgotten password** through an emailed single-use link.
-3. **Browse gigs on the homepage** without an account: short description, city, and price are public. Opening a gig requires login; street address and contact details stay hidden by the API, not just by the UI.
-4. **Post, edit, and publish a gig** (fixed price only in this release).
-5. **Apply to a gig; the poster accepts**, and a contract draft is created.
+3. **Browse gigs on the homepage** without an account: title, short description, city, price, and the cover photo are public. Filter by region, city, and price; newer gigs load as you scroll. Opening a gig requires login; street address and contact details stay hidden by the API, not just by the UI.
+4. **Post, edit, and publish a gig** (fixed price only) with a title, the number of workers needed, and up to 10 photos. The poster can add, remove, or change the cover photo later from the gig page. Photos are resized and their location data is removed.
+5. **Apply to a gig; the poster accepts**, choosing whether to decline the other applicants. A worker can withdraw and re-apply once; the second withdrawal is final.
 6. **Sign the contract** (both parties) and see it move to `in_progress`.
 7. **Complete or dispute** within the documented rules (half-time rule enforced).
 8. **Cancel only by mutual agreement**: one party requests, the other accepts or declines. Mutual cancellation is fee-free. A worker may quit; a quit within the grace window carries no fee.
 
 Demo accounts: [uat-test-accounts.md](./uat-test-accounts.md). Walkthrough: [uat-runbook.md](./uat-runbook.md).
 
-## On dev only (next UAT promotion)
+## Available without a screen
 
-- **Configurable platform settings (PR #26):** admins can read and change fee percentages and lifecycle timers through `GET/PATCH /api/v1/admin/settings`. Each contract stores the settings that applied when both parties signed. There is no admin screen yet.
+- **Configurable platform settings:** admins can read and change fee percentages and lifecycle timers through `GET/PATCH /api/v1/admin/settings`. Each contract stores the settings that applied when both parties signed. There is no admin screen yet.
 
 ## Not built yet
 
@@ -27,7 +27,7 @@ Demo accounts: [uat-test-accounts.md](./uat-test-accounts.md). Walkthrough: [uat
 | Disputes | Evidence submission and arbiter decision | #8 |
 | Admin app | `apps/admin` is a placeholder page | #9 |
 | Billing | Ledger, monthly invoices, carry-over | #11–12 |
-| Uploads | Images and evidence files (R2) | #13 |
+| Uploads | Avatars, application attachments, dispute evidence (gig photos are done) | #13 |
 | SMS | Stubbed; optional for launch | #19 |
 
 ## Known limitations for testers

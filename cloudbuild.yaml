@@ -12,6 +12,7 @@
 #   _FRONTEND_URL         Public URL of the web app (e.g. https://uat.gigs.ge)
 #   _RESEND_API_SECRET    Secret Manager secret name for this environment's Resend key
 #   _AUTH_EMAIL_QUEUE     Cloud Tasks queue name for this environment
+#   _MEDIA_BUCKET         Cloud Storage bucket for gig photos (gigsge-dev-media | gigsge-uat-media)
 #   _API_RUNTIME_SERVICE_ACCOUNT  Environment-specific Cloud Run API identity
 #   _API_SERVICE          Cloud Run service name for the API (gigsge-api | gigsge-api-dev)
 #   _WEB_SERVICE          Cloud Run service name for the web app (gigsge-web | gigsge-web-dev)
@@ -26,7 +27,7 @@ steps:
     args:
       - '-c'
       - |
-        if [[ -z "${_DB_PASSWORD_SECRET}" || -z "${_DB_USER}" || -z "${_DB_INSTANCE}" || -z "${_DB_NAME}" || -z "${_RESEND_API_SECRET}" || -z "${_AUTH_EMAIL_QUEUE}" || -z "${_API_RUNTIME_SERVICE_ACCOUNT}" || -z "${_API_URL}" || -z "${_FRONTEND_URL}" || -z "${_JWT_ACCESS_SECRET_NAME}" || -z "${_JWT_REFRESH_SECRET_NAME}" || -z "${_API_SERVICE}" || -z "${_WEB_SERVICE}" ]]; then
+        if [[ -z "${_DB_PASSWORD_SECRET}" || -z "${_DB_USER}" || -z "${_DB_INSTANCE}" || -z "${_DB_NAME}" || -z "${_RESEND_API_SECRET}" || -z "${_AUTH_EMAIL_QUEUE}" || -z "${_MEDIA_BUCKET}" || -z "${_API_RUNTIME_SERVICE_ACCOUNT}" || -z "${_API_URL}" || -z "${_FRONTEND_URL}" || -z "${_JWT_ACCESS_SECRET_NAME}" || -z "${_JWT_REFRESH_SECRET_NAME}" || -z "${_API_SERVICE}" || -z "${_WEB_SERVICE}" ]]; then
           echo "Required environment-specific database, service, secret, queue, URL, or runtime identity substitutions are missing." >&2
           exit 1
         fi
@@ -82,7 +83,7 @@ steps:
       - '--port=3001'
       - '--cpu=1'
       - '--memory=512Mi'
-      - '--update-env-vars=INSTANCE_CONNECTION_NAME=$PROJECT_ID:us-central1:${_DB_INSTANCE},DB_USER=${_DB_USER},DB_NAME=${_DB_NAME},NODE_ENV=production,FRONTEND_URL=${_FRONTEND_URL},EMAIL_FROM=noreply@gigs.ge,GCP_PROJECT_ID=$PROJECT_ID,AUTH_EMAIL_TASK_LOCATION=us-central1,AUTH_EMAIL_TASK_QUEUE=${_AUTH_EMAIL_QUEUE},AUTH_EMAIL_TASK_TARGET_URL=${_API_URL}/api/v1/auth/internal/email-delivery,ENABLE_UAT_SEED=true'
+      - '--update-env-vars=INSTANCE_CONNECTION_NAME=$PROJECT_ID:us-central1:${_DB_INSTANCE},DB_USER=${_DB_USER},DB_NAME=${_DB_NAME},NODE_ENV=production,FRONTEND_URL=${_FRONTEND_URL},EMAIL_FROM=noreply@gigs.ge,GCP_PROJECT_ID=$PROJECT_ID,AUTH_EMAIL_TASK_LOCATION=us-central1,AUTH_EMAIL_TASK_QUEUE=${_AUTH_EMAIL_QUEUE},AUTH_EMAIL_TASK_TARGET_URL=${_API_URL}/api/v1/auth/internal/email-delivery,MEDIA_BUCKET=${_MEDIA_BUCKET},ENABLE_UAT_SEED=true'
       - '--update-secrets=DB_PASSWORD=${_DB_PASSWORD_SECRET}:latest,JWT_ACCESS_SECRET=${_JWT_ACCESS_SECRET_NAME}:latest,JWT_REFRESH_SECRET=${_JWT_REFRESH_SECRET_NAME}:latest,RESEND_API_KEY=${_RESEND_API_SECRET}:latest'
       - '--container=redis'
       - '--image=redis:7-alpine'
@@ -112,6 +113,7 @@ substitutions:
   _FRONTEND_URL: ''          # REQUIRED — public URL of the web app
   _RESEND_API_SECRET: ''     # REQUIRED — Secret Manager secret name for this environment
   _AUTH_EMAIL_QUEUE: ''      # REQUIRED — Cloud Tasks queue for this environment
+  _MEDIA_BUCKET: ''          # REQUIRED — Cloud Storage bucket for gig photos
   _API_RUNTIME_SERVICE_ACCOUNT: '' # REQUIRED — dedicated API identity for this environment
   _DB_NAME: ''               # REQUIRED — database name for this environment
   _API_SERVICE: ''           # REQUIRED — environment-specific API service name

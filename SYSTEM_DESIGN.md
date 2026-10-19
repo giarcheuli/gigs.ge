@@ -584,7 +584,7 @@ Fees below **1.00 GEL** are not invoiced. They carry over to the next month's cy
 
 ### 9.7 Invoice Delivery
 
-- PDF stored in Cloudflare R2.
+- PDF stored in Google Cloud Storage (a private bucket with signed URLs, separate from the public photo bucket).
 - Notification sent to user Inbox (`INVOICE_GENERATED`).
 - Optional email delivery.
 
@@ -801,11 +801,15 @@ expires_at          TIMESTAMPTZ NOT NULL             -- required; max 30 days fr
 ```sql
 id          UUID PRIMARY KEY DEFAULT gen_random_uuid()
 gig_id      UUID NOT NULL REFERENCES gigs(id) ON DELETE CASCADE
-url         TEXT NOT NULL
-is_preview  BOOLEAN NOT NULL DEFAULT false
+url         TEXT NOT NULL                -- public URL of the full-size WebP (max 1600px)
+thumb_url   TEXT                         -- public URL of the 600x600 WebP thumbnail
+storage_key TEXT                         -- bucket object prefix; '<key>.webp' and '<key>-thumb.webp'
+is_preview  BOOLEAN NOT NULL DEFAULT false -- the cover: shown on board cards, always public
 sort_order  INT NOT NULL DEFAULT 0
 uploaded_at TIMESTAMPTZ NOT NULL DEFAULT now()
 ```
+
+Photos live in a public Google Cloud Storage bucket per environment, never in the database. The API re-encodes every upload with `sharp`, which strips GPS and other metadata. See `docs/specs/feat-gig-photos.md`.
 
 ### 14.5 `applications`
 
@@ -1082,8 +1086,9 @@ UNIQUE (gig_id, reporter_id)
 | POST | `/gigs/:id/reactivate` | ✅ owner | Re-activate from shelf |
 | POST | `/gigs/:id/archive` | ✅ owner | Archive (no active contracts) |
 | DELETE | `/gigs/:id` | ✅ owner | Cancel gig |
-| POST | `/gigs/:id/images` | ✅ owner | Upload image(s) |
-| DELETE | `/gigs/:id/images/:imgId` | ✅ owner | Remove image |
+| POST | `/gigs/:id/images` | ✅ owner | Upload one photo per request (multipart field `file`; max 10 per gig, 10 MB each; draft/active gigs). First photo becomes the cover |
+| DELETE | `/gigs/:id/images/:imgId` | ✅ owner | Remove photo and its stored files; next photo becomes cover if needed |
+| POST | `/gigs/:id/images/:imgId/cover` | ✅ owner | Make this photo the cover (board thumbnail) |
 | GET | `/users/me/gigs` | ✅ | My posted gigs |
 | GET | `/users/me/work` | ✅ | Gigs I applied to / have contracts for |
 
@@ -1280,7 +1285,7 @@ Displays as aggregate counts (e.g., "47 gigs completed | 55 contracts signed | �
 | ORM | Drizzle ORM |
 | Database | PostgreSQL 16 |
 | Queue | BullMQ (Redis) |
-| Storage | Cloudflare R2 |
+| Storage | Google Cloud Storage |
 | Email | Resend (or AWS SES) |
 | SMS | Stubbed for v1 |
 
@@ -1311,7 +1316,7 @@ Displays as aggregate counts (e.g., "47 gigs completed | 55 contracts signed | �
 | S3 | OTP brute force | 5 attempts; 15 min expiry; rate-limit |
 | S4 | Age bypass | Server-side DOB check |
 | S5 | PII exposure | Visibility enforced server-side |
-| S6 | File upload | MIME + magic bytes; max 10 MB; R2 storage |
+| S6 | File upload | Content decoded server-side (not trusting declared MIME); max 10 MB; re-encoded without metadata; Google Cloud Storage |
 | S7 | CORS | Strict origin allowlist |
 | S8 | SQL injection | Parameterized queries via ORM |
 | S9 | XSS | Escape user content; CSP headers |
@@ -1350,7 +1355,7 @@ Displays as aggregate counts (e.g., "47 gigs completed | 55 contracts signed | �
 | D-21 | Contact sharing | All non-private fields; permanent (cannot revoke) |
 | D-22 | Invoice payment (v1) | Admin manually marks paid |
 | D-23 | Gig categories | "My Jobs" (hiring) / "My Work" (working) |
-| D-24 | Storage | Cloudflare R2 |
+| D-24 | Storage | Google Cloud Storage (changed from Cloudflare R2 on 2026-10-20: same GCP project, no extra keys) |
 | D-25 | Analyzer | Future; v1 uses report-based moderation |
 | D-26 | QR code format | TBD |
 | D-28 | Worker rejects draft | Poster can revise & re-send unlimited times; can reject application to end negotiation |

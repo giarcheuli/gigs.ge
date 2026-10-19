@@ -3,9 +3,12 @@ import cors from '@fastify/cors';
 import cookie from '@fastify/cookie';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
+import multipart from '@fastify/multipart';
+import { MAX_FILE_SIZE_BYTES } from '@gigs/shared/constants';
 import { env } from './config/env.js';
 import { authRoutes } from './routes/auth/index.js';
 import { gigsRoutes } from './routes/gigs/index.js';
+import { gigImagesRoutes } from './routes/gigs/images.js';
 import { applicationsRoutes } from './routes/applications/index.js';
 import { contractsRoutes } from './routes/contracts/index.js';
 import { regionsRoutes } from './routes/regions/index.js';
@@ -30,6 +33,7 @@ export async function buildApp() {
     credentials: true,
   });
   await app.register(cookie);
+  await app.register(multipart, { limits: { fileSize: MAX_FILE_SIZE_BYTES, files: 1 } });
 
   // ── Rate Limiting ──
   await app.register(rateLimit, {
@@ -67,6 +71,7 @@ export async function buildApp() {
   // ── API Routes ──
   await app.register(authRoutes, { prefix: '/api/v1/auth' });
   await app.register(gigsRoutes, { prefix: '/api/v1/gigs' });
+  await app.register(gigImagesRoutes, { prefix: '/api/v1/gigs' });
   await app.register(applicationsRoutes, { prefix: '/api/v1/applications' });
   await app.register(contractsRoutes, { prefix: '/api/v1/contracts' });
   await app.register(regionsRoutes, { prefix: '/api/v1/regions' });

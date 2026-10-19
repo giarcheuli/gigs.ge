@@ -213,11 +213,12 @@
       "phase": "m3_money_media"
     },
     {
-      "task": "Gig photo upload: up to 5 images per gig, first image shown on board cards, full gallery for logged-in users; storage on Google Cloud Storage or Cloudflare R2 (owner to choose).",
+      "task": "Gig photo upload: up to 10 photos per gig, cover photo shown on board cards, full gallery per the poster's images setting; storage on Google Cloud Storage.",
       "priority": "high",
-      "status": "not_started",
+      "status": "done",
       "phase": "m1_uat_round1",
-      "notes": "Requested by product owner 2026-10-20 for the public homepage board (docs/specs/feat-public-gig-board.md D11). Replaces the R2-only upload item below for gig images; avatars and dispute evidence reuse the same upload path."
+      "completedAt": "2026-10-20",
+      "notes": "docs/specs/feat-gig-photos.md. Owner chose Google Cloud Storage (D11). Buckets gigsge-dev-media and gigsge-uat-media. Avatars and dispute evidence can reuse processGigImage/media-storage."
     },
     {
       "task": "Public gig board on the homepage: city and price always public (vis_price/vis_city deprecated), detail page behind login, long description for any logged-in user, region/city names on every gig.",
@@ -252,7 +253,7 @@
       "notes": "Slice 4 of docs/specs/feat-public-gig-board.md (D9-D10). Accepted workers now also receive an application_accepted notification."
     },
     {
-      "task": "Finalize and test Cloudflare R2 integration for file uploads (e.g., gig images, user avatars, dispute evidence).",
+      "task": "Extend Google Cloud Storage uploads to user avatars, application attachments, and dispute evidence (private bucket + signed URLs for evidence).",
       "priority": "high",
       "status": "not_started",
       "phase": "m3_money_media"
