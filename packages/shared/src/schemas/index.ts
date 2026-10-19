@@ -164,6 +164,16 @@ export const adminMarkInvoicePaidSchema = z.object({
   paidAt: isoDatetime.optional(),
 });
 
+export const platformSettingsSchema = z.object({
+  posterFeePercent: z.number().min(0).max(100).multipleOf(0.01),
+  workerFeePercent: z.number().min(0).max(100).multipleOf(0.01),
+  cancelGraceHours: z.number().int().min(1).max(8760),
+  completionResponseHours: z.number().int().min(1).max(8760),
+  overdueAutoCompleteDays: z.number().int().min(1).max(365),
+  disputeArbiterUnlockHours: z.number().int().min(1).max(8760),
+  disputeAutoResolveDays: z.number().int().min(1).max(365),
+}).strict();
+
 // ── Pagination ──
 export const paginationSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
@@ -184,3 +194,4 @@ export type CreateAppendixInput = z.infer<typeof createAppendixSchema>;
 export type CreateReviewInput = z.infer<typeof createReviewSchema>;
 export type SendMessageInput = z.infer<typeof sendMessageSchema>;
 export type PaginationInput = z.infer<typeof paginationSchema>;
+export type PlatformSettingsInput = z.infer<typeof platformSettingsSchema>;

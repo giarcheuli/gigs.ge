@@ -833,11 +833,30 @@ status              TEXT NOT NULL DEFAULT 'draft'
 poster_signed_at    TIMESTAMPTZ
 worker_signed_at    TIMESTAMPTZ
 fee_eligible        BOOLEAN NOT NULL DEFAULT true
+poster_fee_percent_snapshot NUMERIC(5,2) NOT NULL DEFAULT 3.00
+worker_fee_percent_snapshot NUMERIC(5,2) NOT NULL DEFAULT 2.00
+cancel_grace_hours_snapshot INT NOT NULL DEFAULT 24
+completion_response_hours_snapshot INT NOT NULL DEFAULT 48
+overdue_auto_complete_days_snapshot INT NOT NULL DEFAULT 14
+dispute_arbiter_unlock_hours_snapshot INT NOT NULL DEFAULT 24
+dispute_auto_resolve_days_snapshot INT NOT NULL DEFAULT 7
 completed_at        TIMESTAMPTZ
 cancelled_at        TIMESTAMPTZ
 created_at          TIMESTAMPTZ NOT NULL DEFAULT now()
 updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
 ```
+
+Contract policy values are copied from the active platform settings when the second
+party signs and the contract enters `in_progress`. Later changes apply only to new
+contracts; they do not alter obligations already agreed to by either party.
+
+### 14.7.1 `platform_settings` and `platform_settings_history`
+
+`platform_settings` stores the single global set of fee percentages and lifecycle
+timeframes. `platform_settings_history` records the administrator and before/after
+values for each change. Only admin-authorized API routes can read or update this data.
+The settings editor is part of the planned admin app; timer and billing workers must
+consume the contract snapshots before their values are treated as operational controls.
 
 ### 14.8 `contract_appendices`
 
@@ -1149,6 +1168,8 @@ UNIQUE (gig_id, reporter_id)
 | PATCH | `/admin/flags/:id` | ✅ admin | Review / dismiss |
 | GET | `/admin/invoices` | ✅ admin | All invoices |
 | PATCH | `/admin/invoices/:id` | ✅ admin | Mark as paid |
+| GET | `/admin/settings` | ✅ admin | Read active fee and lifecycle settings |
+| PATCH | `/admin/settings` | ✅ admin | Replace all active settings; record before/after audit values |
 | GET | `/admin/messages/inbox` | ✅ admin | Admin inbox |
 | GET | `/admin/messages/sent` | ✅ admin | Admin sent |
 | POST | `/admin/messages` | ✅ admin | Send to user |
@@ -1188,6 +1209,7 @@ UNIQUE (gig_id, reporter_id)
 | Screen | Route | Access |
 |--------|-------|--------|
 | Dashboard | `/` | Admin |
+| Platform Settings | `/settings` | Admin |
 | User List | `/users` | Admin |
 | User Detail | `/users/:id` | Admin |
 | All Gigs | `/gigs` | Admin |

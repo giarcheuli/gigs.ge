@@ -1,16 +1,17 @@
 {
   "meta": {
-    "updatedAt": "2026-10-07",
-    "goal": "Deploy the UAT slice for stakeholder testing, then complete deal-lifecycle automation, billing, and uploads on the path to public soft launch.",
-    "repoState": "uat_deploy_pending",
-    "summary": "Full audit on 2026-10-07 confirmed the happy-path UAT slice (auth, gigs, applications, contracts, basic notifications) is implemented with mocked-DB integration tests (~1,670 lines). Branch consolidation done: uat/first-slice fully merged into main (PR #14) and retired; orphaned fix/web-auth-redirect merged 2026-10-07; main is now the canonical branch. Not yet implemented: contract timers (48h auto-complete, 14d overdue, 7d dispute auto-resolve), billing/invoicing, file uploads (R2), dispute evidence/arbitration, admin app (placeholder only), server-side contact-visibility enforcement, real email/SMS. NEW REQUIREMENT (2026-10-07): all contract timeframes and fee percentages must be runtime-configurable via a platform settings store managed from the admin panel — no hard-coded business constants. Next gate: fix Cloud Build _API_URL substitution, deploy to Cloud Run, pass smoke-check, deliver stakeholder guides + FAQ."
+    "updatedAt": "2026-10-14",
+    "goal": "Build the product through a dev-first workflow, completing configurable deal rules, lifecycle automation, billing, and uploads before public soft launch.",
+    "repoState": "development_active",
+    "summary": "As of 2026-10-14, dev.gigs.ge and uat.gigs.ge are live with separate Cloud Run services and databases, and both passed the six-point smoke check. New work goes to dev, then is promoted to main/UAT. The core happy path exists, but business rules are partly hard-coded and automation is missing: fee ledger/invoices, contract timers, disputes/evidence/arbitration, admin management UI, uploads, and server-side contact visibility. Product decision: postpone tester guides and FAQ; they are not launch-development blockers. Active slice: admin-managed platform settings, audit history, and immutable policy snapshots for new contracts; later timer and billing slices must consume those snapshots."
   },
   "milestones": [
     {
       "id": "M0",
       "name": "Reality sync & UAT deploy",
-      "status": "in_progress",
-      "exitCriteria": "Live Cloud Run URL passing scripts/smoke-check.sh; stakeholder guides and FAQ delivered; backlog and branch policy synced (done 2026-10-07)."
+      "status": "done",
+      "completedAt": "2026-10-07",
+      "exitCriteria": "Dev and UAT Cloud Run environments are live on their custom domains, have separate databases, and pass the six-point smoke check; branch promotion policy is documented."
     },
     {
       "id": "M1",
@@ -63,8 +64,8 @@
     },
     {
       "order": 4,
-      "task": "Prepare stakeholder-facing docs, smoke checks, and a repeatable UAT environment.",
-      "status": "in_progress",
+      "task": "Establish Cloud Run development and UAT environments with repeatable smoke checks.",
+      "status": "done",
       "completedSubtasks": [
         "UAT runbook at docs/guides/uat-runbook.md",
         "Docker Compose stack (docker-compose.yml + Dockerfiles) — idempotent schema push + UAT seed on container start",
@@ -73,13 +74,11 @@
         "API ESM startup crash fixed and deployed; Cloud Run live at gigsge-web/gigsge-api (2026-10-07)",
         "Smoke check passed 6/6 against live Cloud Run URLs (2026-10-07, scripts/smoke-check.ps1 added for Windows)",
         "Custom domain live (2026-10-07): uat.gigs.ge → web, api.uat.gigs.ge → API; Cloudflare DNS; smoke check 6/6 against new URLs",
-        "Dev environment live (2026-10-07): dev branch → gigsge-api-dev/gigsge-web-dev → dev.gigs.ge + api.dev.gigs.ge, separate gigsge_dev database, parameterized cloudbuild.yaml; branching ladder now dev → main (uat) → future qa/prod"
+        "Dev environment live (2026-10-07): dev branch → gigsge-api-dev/gigsge-web-dev → dev.gigs.ge + api.dev.gigs.ge, separate gigsge_dev database, parameterized cloudbuild.yaml; branching ladder now dev → main (uat) → future qa/prod",
+        "Dev and UAT smoke checks both passed 6/6 (2026-10-07)."
       ],
-      "remaining": [
-        "Stakeholder user guides (step-by-step for poster and worker roles) — postponed by user",
-        "FAQ for trust model and fee structure — postponed by user"
-      ],
-      "notes": "Decision 2026-10-07: deploy on Cloud Run (pipeline already exists); the GCE VM option is dropped. Domain gigs.ge bought at domenebi.ge, DNS hosted on Cloudflare."
+      "remaining": [],
+      "notes": "Decision 2026-10-07: deploy on Cloud Run; GCE VM option dropped. Domains are hosted in Cloudflare. Tester guides and FAQ are intentionally deferred and tracked separately, not blockers for product development."
     }
   ],
   "uiBugs": [
@@ -143,11 +142,12 @@
       "notes": "Coverage now spans auth, gigs, applications, and the full contract lifecycle (sign/complete/dispute/cancel/quit), per PR #12. Total ~1,670 lines of test code across four files in apps/api/src/__tests__/."
     },
     {
-      "task": "Create a platform_settings store so contract timeframes (48h auto-complete, 24h grace, 14d overdue, 7d dispute auto-resolve) and fee percentages (3% poster / 2% worker) are runtime-configurable, with admin API to read and update them.",
+      "task": "Add platform settings storage, an admin-only read/update API, change audit history, and contract policy snapshots; wire grace-period checks to the saved contract snapshot.",
       "priority": "high",
-      "status": "not_started",
+      "status": "done",
       "phase": "m2_deal_lifecycle",
-      "notes": "Foundation for M2 and M3. No business constant may be hard-coded; all timers and fee logic must read from settings. Requirement added 2026-10-07."
+      "completedAt": "2026-10-14",
+      "notes": "Backend slice implemented and tested per docs/specs/feat-configurable-contract-settings.md. Defaults: poster fee 3%, worker fee 2%, cancellation grace 24h, completion response 48h, overdue completion 14d, arbiter unlock 24h, dispute auto-resolution 7d. New settings apply when the second party signs; existing contracts are unchanged. The admin settings UI/deployment and timer/billing integrations remain separate M2/M3 work."
     },
     {
       "task": "Implement BullMQ background workers for contract timers: 48h auto-complete, 14-day overdue auto-complete, 7-day dispute auto-resolve — all reading timeframes from platform_settings.",
@@ -168,11 +168,11 @@
       "phase": "m2_deal_lifecycle"
     },
     {
-      "task": "Build minimal admin app: admin login, platform settings editor, dispute queue with arbiter resolution UI.",
+      "task": "Build and deploy the minimal admin app: secure first-admin setup, admin login, platform settings editor, and dispute queue with arbiter resolution UI.",
       "priority": "high",
       "status": "not_started",
       "phase": "m2_deal_lifecycle",
-      "notes": "apps/admin is currently a placeholder. Scope deliberately minimal; analytics/moderation dashboards come post-launch."
+      "notes": "apps/admin is currently a placeholder. First-admin setup must be restricted to an owner-controlled operation, never public self-registration. Deploy to dev first, then UAT, and configure API CORS and admin subdomains before remote use. Analytics/moderation dashboards come post-launch."
     },
     {
       "task": "Implement billing ledger and fee calculation on contract completion using configurable fee percentages from platform_settings.",
@@ -272,14 +272,16 @@
     {
       "task": "Create step-by-step guides for gig posters and workers (e.g., how to post a gig, how to apply for gigs).",
       "priority": "high",
-      "status": "not_started",
-      "phase": "m0_uat_deploy"
+      "status": "postponed",
+      "phase": "post_launch",
+      "notes": "Explicitly deferred by product owner on 2026-10-14; not a development or UAT deployment blocker."
     },
     {
       "task": "Develop a FAQ section addressing common user concerns.",
       "priority": "high",
-      "status": "not_started",
-      "phase": "m0_uat_deploy"
+      "status": "postponed",
+      "phase": "post_launch",
+      "notes": "Explicitly deferred by product owner on 2026-10-14; not a development or UAT deployment blocker."
     },
     {
       "task": "Define a go-to-market plan (e.g., target audience segmentation, social media campaigns).",
@@ -296,8 +298,9 @@
     {
       "task": "Develop educational content on the fee structure and dispute resolution process.",
       "priority": "medium",
-      "status": "not_started",
-      "phase": "m4_hardening"
+      "status": "postponed",
+      "phase": "post_launch",
+      "notes": "Deferred with the stakeholder guides and FAQ until after platform development work."
     },
     {
       "task": "Host webinars or Q&A sessions for early adopters.",
@@ -310,8 +313,9 @@
     {
       "task": "Finalize user-facing documentation (e.g., platform overview, contract lifecycle explanation, dispute resolution flow).",
       "priority": "high",
-      "status": "not_started",
-      "phase": "m1_uat_round1"
+      "status": "postponed",
+      "phase": "post_launch",
+      "notes": "User-facing guides and explanatory docs are deferred by product owner on 2026-10-14."
     },
     {
       "task": "Add developer documentation for API usage.",

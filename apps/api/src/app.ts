@@ -10,6 +10,7 @@ import { applicationsRoutes } from './routes/applications/index.js';
 import { contractsRoutes } from './routes/contracts/index.js';
 import { regionsRoutes } from './routes/regions/index.js';
 import { notificationsRoutes } from './routes/notifications/index.js';
+import { adminSettingsRoutes } from './routes/admin/settings.js';
 
 export async function buildApp() {
   const app = Fastify({
@@ -60,6 +61,7 @@ export async function buildApp() {
   await app.register(contractsRoutes, { prefix: '/api/v1/contracts' });
   await app.register(regionsRoutes, { prefix: '/api/v1/regions' });
   await app.register(notificationsRoutes, { prefix: '/api/v1/notifications' });
+  await app.register(adminSettingsRoutes, { prefix: '/api/v1/admin' });
 
   return app;
 }

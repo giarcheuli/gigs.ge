@@ -9,4 +9,5 @@ export { billingLedger, invoices } from './billing';
 export { reviews } from './reviews';
 export { notifications, messages } from './messages';
 export { otpCodes, infoRequests, gigFlags } from './misc';
+export { platformSettings, platformSettingsHistory } from './platform-settings';
 export * from './relations';

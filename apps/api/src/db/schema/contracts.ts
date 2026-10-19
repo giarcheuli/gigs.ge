@@ -22,6 +22,13 @@ export const contracts = pgTable('contracts', {
   dueAt: timestamp('due_at', { withTimezone: true }),
   status: text('status').notNull().default('draft'),
   // 'draft'|'in_progress'|'pending_completion'|'completed'|'disputed'|'arbitration'|'auto_resolved'|'cancelled'|'quit'
+  posterFeePercentSnapshot: numeric('poster_fee_percent_snapshot', { precision: 5, scale: 2 }).notNull().default('3.00'),
+  workerFeePercentSnapshot: numeric('worker_fee_percent_snapshot', { precision: 5, scale: 2 }).notNull().default('2.00'),
+  cancelGraceHoursSnapshot: integer('cancel_grace_hours_snapshot').notNull().default(24),
+  completionResponseHoursSnapshot: integer('completion_response_hours_snapshot').notNull().default(48),
+  overdueAutoCompleteDaysSnapshot: integer('overdue_auto_complete_days_snapshot').notNull().default(14),
+  disputeArbiterUnlockHoursSnapshot: integer('dispute_arbiter_unlock_hours_snapshot').notNull().default(24),
+  disputeAutoResolveDaysSnapshot: integer('dispute_auto_resolve_days_snapshot').notNull().default(7),
   posterSignedAt: timestamp('poster_signed_at', { withTimezone: true }),
   workerSignedAt: timestamp('worker_signed_at', { withTimezone: true }),
   feeEligible: boolean('fee_eligible').notNull().default(true),
