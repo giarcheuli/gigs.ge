@@ -62,8 +62,12 @@ interface Application {
   status: string;
   message: string | null;
   createdAt: string;
+  withdrawalCount?: number;
   contract?: { id: string } | null;
 }
+
+// Mirrors MAX_APPLICATION_WITHDRAWALS on the API: one re-apply, then the second withdrawal is final.
+const MAX_WITHDRAWALS = 2;
 
 const REGION_FALLBACK = (regionId: number) => `Region ${regionId}`;
 
@@ -160,9 +164,13 @@ export default function GigDetailPage() {
   });
 
   // ── Accept application mutation ──
+  const [choosingFor, setChoosingFor] = useState<string | null>(null);
   const acceptMutation = useMutation({
-    mutationFn: async (applicationId: string) => {
-      const res = await apiFetch(`/applications/${applicationId}/accept`, { method: 'POST' });
+    mutationFn: async ({ applicationId, declineOthers }: { applicationId: string; declineOthers: boolean }) => {
+      const res = await apiFetch(`/applications/${applicationId}/accept`, {
+        method: 'POST',
+        body: JSON.stringify({ declineOthers }),
+      });
       if (!res.ok) {
         const body = (await res.json()) as { error?: string };
         throw new Error(body.error ?? 'Failed to accept application');
@@ -174,6 +182,32 @@ export default function GigDetailPage() {
       router.push(`/contracts/${data.contract.id}`);
     },
   });
+
+  // ── Withdraw application mutation ──
+  const withdrawMutation = useMutation({
+    mutationFn: async (applicationId: string) => {
+      const res = await apiFetch(`/applications/${applicationId}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const body = (await res.json()) as { error?: string };
+        throw new Error(body.error ?? 'Failed to withdraw application');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['my-applications'] });
+    },
+    onError: (err: Error) => {
+      setApplyError(err.message);
+    },
+  });
+
+  function confirmWithdraw(application: Application) {
+    const isFinal = (application.withdrawalCount ?? 0) + 1 >= MAX_WITHDRAWALS;
+    const message = isFinal
+      ? 'This is your final withdrawal. You will not be able to apply to this gig again. Withdraw anyway?'
+      : 'Withdraw your application? You can apply again once.';
+    if (window.confirm(message)) withdrawMutation.mutate(application.id);
+  }
 
   if (loading || !user || isLoading) {
     return (
@@ -303,15 +337,46 @@ export default function GigDetailPage() {
                         )}
                         <ApplicationStatusBadge status={app.status} />
                       </div>
-                      {app.status === 'pending' && gig.status === 'active' && (
-                        <button
-                          onClick={() => acceptMutation.mutate(app.id)}
-                          disabled={acceptMutation.isPending}
-                          className="shrink-0 rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60 transition-colors"
-                        >
-                          {acceptMutation.isPending ? 'Accepting…' : 'Accept'}
-                        </button>
-                      )}
+                      {app.status === 'pending' && gig.status === 'active' && (() => {
+                        const otherPending = applications.filter((a) => a.status === 'pending' && a.id !== app.id).length;
+                        if (choosingFor === app.id) {
+                          return (
+                            <div className="shrink-0 flex flex-col items-end gap-1.5 text-right">
+                              <p className="text-xs text-gray-600">
+                                Decline the other {otherPending} pending applicant{otherPending === 1 ? '' : 's'}?
+                              </p>
+                              <button
+                                onClick={() => acceptMutation.mutate({ applicationId: app.id, declineOthers: true })}
+                                disabled={acceptMutation.isPending}
+                                className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
+                              >
+                                Hire and decline others
+                              </button>
+                              <button
+                                onClick={() => acceptMutation.mutate({ applicationId: app.id, declineOthers: false })}
+                                disabled={acceptMutation.isPending}
+                                className="rounded-lg border border-brand-600 px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-50 disabled:opacity-60"
+                              >
+                                Hire and keep others
+                              </button>
+                              <button onClick={() => setChoosingFor(null)} className="text-xs text-gray-500 hover:text-gray-700">
+                                Cancel
+                              </button>
+                            </div>
+                          );
+                        }
+                        return (
+                          <button
+                            onClick={() => (otherPending > 0
+                              ? setChoosingFor(app.id)
+                              : acceptMutation.mutate({ applicationId: app.id, declineOthers: false }))}
+                            disabled={acceptMutation.isPending}
+                            className="shrink-0 rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60 transition-colors"
+                          >
+                            {acceptMutation.isPending ? 'Accepting…' : 'Accept'}
+                          </button>
+                        );
+                      })()}
                       {app.contract && (
                         <Link
                           href={`/contracts/${app.contract.id}`}
@@ -331,7 +396,7 @@ export default function GigDetailPage() {
         {/* ── Worker apply section ── */}
         {!isPoster && isVerified && gig.status === 'active' && (
           <section className="bg-white rounded-xl p-6 border border-gray-100 space-y-3">
-            {myApplicationForThisGig ? (
+            {myApplicationForThisGig && myApplicationForThisGig.status !== 'withdrawn' ? (
               <div>
                 <p className="text-sm font-medium text-gray-700">
                   You&apos;ve applied for this gig.
@@ -346,6 +411,15 @@ export default function GigDetailPage() {
                       View contract →
                     </Link>
                   )}
+                  {myApplicationForThisGig.status === 'pending' && (
+                    <button
+                      onClick={() => confirmWithdraw(myApplicationForThisGig)}
+                      disabled={withdrawMutation.isPending}
+                      className="block text-sm text-red-600 hover:underline disabled:opacity-60"
+                    >
+                      {withdrawMutation.isPending ? 'Withdrawing…' : 'Withdraw application'}
+                    </button>
+                  )}
                   <Link
                     href="/"
                     className="block text-sm text-gray-500 hover:text-brand-600"
@@ -354,6 +428,10 @@ export default function GigDetailPage() {
                   </Link>
                 </div>
               </div>
+            ) : myApplicationForThisGig && (myApplicationForThisGig.withdrawalCount ?? 0) >= MAX_WITHDRAWALS ? (
+              <p className="text-sm text-gray-600">
+                You withdrew from this gig twice, so you can&apos;t apply to it again.
+              </p>
             ) : showApplyForm ? (
               <div className="space-y-3">
                 <h2 className="font-semibold text-gray-800">Apply</h2>
@@ -389,7 +467,7 @@ export default function GigDetailPage() {
                 onClick={() => { setApplyError(null); setShowApplyForm(true); }}
                 className="w-full rounded-lg bg-brand-600 px-4 py-3 font-semibold text-white hover:bg-brand-700 transition-colors"
               >
-                Apply for this gig
+                {myApplicationForThisGig ? 'Apply again' : 'Apply for this gig'}
               </button>
             )}
           </section>

@@ -246,9 +246,10 @@
     {
       "task": "Hiring rules: poster chooses whether accepting one applicant declines the others (with notifications); workers can re-apply once after withdrawing, with a final-withdrawal warning.",
       "priority": "high",
-      "status": "not_started",
+      "status": "done",
       "phase": "m1_uat_round1",
-      "notes": "Slice 4 of docs/specs/feat-public-gig-board.md (D9-D10)."
+      "completedAt": "2026-10-20",
+      "notes": "Slice 4 of docs/specs/feat-public-gig-board.md (D9-D10). Accepted workers now also receive an application_accepted notification."
     },
     {
       "task": "Finalize and test Cloudflare R2 integration for file uploads (e.g., gig images, user avatars, dispute evidence).",

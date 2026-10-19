@@ -76,6 +76,7 @@ const pendingApplication = {
   status: 'pending',
   message: 'I can do this job',
   rejectionReason: null,
+  withdrawalCount: 0,
   createdAt: new Date('2026-05-01T10:05:00.000Z'),
   updatedAt: new Date('2026-05-01T10:05:00.000Z'),
 };
@@ -336,7 +337,108 @@ describe('Applications + Contracts Routes Integration', () => {
         createdAt: contractDraft.createdAt.toISOString(),
         updatedAt: contractDraft.updatedAt.toISOString(),
       }),
+      declinedCount: 0,
     });
+  });
+
+  it('declines the other pending applicants only when the poster asks to', async () => {
+    const acceptedApplication = { ...pendingApplication, status: 'accepted' };
+    const otherApplicant = '77777777-7777-7777-7777-777777777777';
+    const declinedApplication = {
+      ...pendingApplication,
+      id: '88888888-8888-8888-8888-888888888888',
+      applicantId: otherApplicant,
+      status: 'rejected',
+    };
+    const notificationValues = jest.fn().mockResolvedValue(undefined);
+    const tx = {
+      update: jest.fn()
+        .mockReturnValueOnce(mockTransactionUpdateReturning(acceptedApplication))
+        .mockReturnValueOnce({
+          set: jest.fn().mockReturnValue({
+            where: jest.fn().mockReturnValue({
+              returning: jest.fn().mockResolvedValue([declinedApplication]),
+            }),
+          }),
+        }),
+      insert: jest.fn()
+        .mockReturnValueOnce(mockInsertReturning(contractDraft))
+        .mockReturnValueOnce({ values: notificationValues }),
+    };
+
+    mockDb.query.applications.findFirst.mockResolvedValueOnce(pendingApplication);
+    mockDb.query.gigs.findFirst.mockResolvedValueOnce(activeGig);
+    mockDb.query.contracts.findFirst.mockResolvedValueOnce(null);
+    mockDb.transaction.mockImplementationOnce(async (callback: (transaction: typeof tx) => Promise<unknown>) => callback(tx));
+
+    const app = await buildApp();
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/v1/applications/${pendingApplication.id}/accept`,
+      headers: { authorization: `Bearer ${makeToken(POSTER_ID)}` },
+      payload: { declineOthers: true },
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().declinedCount).toBe(1);
+    expect(tx.update).toHaveBeenCalledTimes(2);
+    expect(notificationValues).toHaveBeenCalledWith([
+      expect.objectContaining({ recipientId: WORKER_ID, type: 'application_accepted' }),
+      expect.objectContaining({ recipientId: otherApplicant, type: 'application_declined' }),
+    ]);
+  });
+
+  it('lets a worker re-apply once after withdrawing, then blocks after the second withdrawal', async () => {
+    const withdrawnOnce = { ...pendingApplication, status: 'withdrawn', withdrawalCount: 1 };
+    const withdrawnTwice = { ...pendingApplication, status: 'withdrawn', withdrawalCount: 2 };
+    const reactivated = { ...pendingApplication, withdrawalCount: 1 };
+
+    mockDb.query.gigs.findFirst
+      .mockResolvedValueOnce(activeGig)
+      .mockResolvedValueOnce(activeGig);
+    mockDb.query.applications.findFirst
+      .mockResolvedValueOnce(withdrawnOnce)
+      .mockResolvedValueOnce(withdrawnTwice);
+    mockDb.update.mockReturnValueOnce(mockUpdateReturning(reactivated));
+    mockDb.insert.mockReturnValueOnce(mockInsertReturning({ id: 'notification-1' }));
+
+    const app = await buildApp();
+    const reapply = await app.inject({
+      method: 'POST',
+      url: '/api/v1/applications',
+      headers: { authorization: `Bearer ${makeToken(WORKER_ID)}` },
+      payload: { gigId: activeGig.id },
+    });
+    const blocked = await app.inject({
+      method: 'POST',
+      url: '/api/v1/applications',
+      headers: { authorization: `Bearer ${makeToken(WORKER_ID)}` },
+      payload: { gigId: activeGig.id },
+    });
+    await app.close();
+
+    expect(reapply.statusCode).toBe(201);
+    expect(reapply.json()).toMatchObject({ reapplied: true, application: { status: 'pending' } });
+    expect(blocked.statusCode).toBe(409);
+    expect(blocked.json()).toMatchObject({ code: 'REAPPLY_LIMIT_REACHED' });
+  });
+
+  it('reports that a second withdrawal is final', async () => {
+    const reapplied = { ...pendingApplication, withdrawalCount: 1 };
+    mockDb.query.applications.findFirst.mockResolvedValueOnce(reapplied);
+    mockDb.update.mockReturnValueOnce(mockUpdateReturning({ ...reapplied, status: 'withdrawn', withdrawalCount: 2 }));
+
+    const app = await buildApp();
+    const response = await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/applications/${pendingApplication.id}`,
+      headers: { authorization: `Bearer ${makeToken(WORKER_ID)}` },
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ canReapply: false, application: { status: 'withdrawn', withdrawalCount: 2 } });
   });
 
   it('rejects acceptance when the gig is not fixed-price in this UAT slice', async () => {

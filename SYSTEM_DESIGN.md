@@ -816,10 +816,13 @@ applicant_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
 status          TEXT NOT NULL DEFAULT 'pending' -- 'pending'|'accepted'|'rejected'|'closed'|'withdrawn'
 message         TEXT
 rejection_reason TEXT                              -- free text; visible only to poster
+withdrawal_count INT NOT NULL DEFAULT 0            -- re-apply allowed once; the second withdrawal is final
 created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 UNIQUE (gig_id, applicant_id)
 ```
+
+**Hiring rules (2026-10-20):** a gig may hire several workers (`gigs.workers_needed` is an estimate, not a cap). When accepting an applicant, the poster chooses whether to decline the other pending applicants (`POST /applications/:id/accept` with `{ "declineOthers": true }`); declined applicants get an `application_declined` notification. A worker who withdraws may re-apply once, which reopens the same application row; the UI warns before the second, final withdrawal. See [docs/specs/feat-public-gig-board.md](docs/specs/feat-public-gig-board.md).
 
 ### 14.6 `application_attachments`
 
