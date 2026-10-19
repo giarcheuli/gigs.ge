@@ -5,9 +5,11 @@
  *
  * Renders differently based on the viewer:
  *
- *  Visitor / unverified user:
- *    - Sees basic info. Fields hidden based on visibility settings.
- *    - CTA: sign up / verify to apply.
+ * Requires login: logged-out visitors are sent to /login and returned here.
+ *
+ *  Unverified user:
+ *    - Sees the gig. Fields hidden based on the poster's remaining privacy settings.
+ *    - CTA: verify email to apply.
  *
  *  Verified worker (not the poster):
  *    - Sees full visible fields. Apply button (or "Already applied" message).
@@ -24,6 +26,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/lib/auth-context';
 import { apiFetch } from '@/lib/api';
+import { priceLabel as boardPriceLabel } from '@/components/gig-board';
 import { WORKER_FEE_RATE } from '@gigs/shared/constants';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -31,10 +34,14 @@ import { WORKER_FEE_RATE } from '@gigs/shared/constants';
 interface Gig {
   id: string;
   posterId: string;
+  title?: string | null;
   shortDescription: string;
   longDescription: string | null;
+  workersNeeded?: number;
   regionId: number;
   cityId: number | null;
+  region?: { id: number; nameEn: string } | null;
+  city?: { id: number; nameEn: string } | null;
   streetAddress: string | null;
   priceType: 'fixed' | 'range' | 'negotiable';
   priceFixed: string | null;
@@ -43,8 +50,6 @@ interface Gig {
   availableFrom: string | null;
   availableTo: string | null;
   status: string;
-  visPrice: string;
-  visCity: string;
   visAddress: string;
   visDates: string;
   expiresAt: string;
@@ -57,25 +62,30 @@ interface Application {
   status: string;
   message: string | null;
   createdAt: string;
+  withdrawalCount?: number;
   contract?: { id: string } | null;
 }
 
-const REGION_NAMES: Record<number, string> = {
-  1: 'Tbilisi', 2: 'Adjara', 3: 'Guria', 4: 'Imereti',
-  5: 'Kakheti', 6: 'Kvemo Kartli', 7: 'Mtskheta-Mtianeti',
-  8: 'Racha-Lechkhumi', 9: 'Samegrelo-Zemo Svaneti',
-  10: 'Samtskhe-Javakheti', 11: 'Shida Kartli',
-};
+// Mirrors MAX_APPLICATION_WITHDRAWALS on the API: one re-apply, then the second withdrawal is final.
+const MAX_WITHDRAWALS = 2;
+
+const REGION_FALLBACK = (regionId: number) => `Region ${regionId}`;
 
 // ── Page component ─────────────────────────────────────────────────────────────
 
 export default function GigDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const qc = useQueryClient();
 
   const isVerified = Boolean(user?.emailVerified);
+
+  useEffect(() => {
+    if (!loading && !user) {
+      router.replace(`/login?next=${encodeURIComponent(`/gigs/${params.id}`)}`);
+    }
+  }, [loading, user, router, params.id]);
 
   // ── Fetch gig ──
   const {
@@ -84,6 +94,7 @@ export default function GigDetailPage() {
     isError,
   } = useQuery<Gig>({
     queryKey: ['gig', params.id],
+    enabled: Boolean(user),
     queryFn: async () => {
       const res = await apiFetch(`/gigs/${params.id}`);
       if (!res.ok) throw new Error('Not found');
@@ -153,9 +164,13 @@ export default function GigDetailPage() {
   });
 
   // ── Accept application mutation ──
+  const [choosingFor, setChoosingFor] = useState<string | null>(null);
   const acceptMutation = useMutation({
-    mutationFn: async (applicationId: string) => {
-      const res = await apiFetch(`/applications/${applicationId}/accept`, { method: 'POST' });
+    mutationFn: async ({ applicationId, declineOthers }: { applicationId: string; declineOthers: boolean }) => {
+      const res = await apiFetch(`/applications/${applicationId}/accept`, {
+        method: 'POST',
+        body: JSON.stringify({ declineOthers }),
+      });
       if (!res.ok) {
         const body = (await res.json()) as { error?: string };
         throw new Error(body.error ?? 'Failed to accept application');
@@ -168,7 +183,33 @@ export default function GigDetailPage() {
     },
   });
 
-  if (isLoading) {
+  // ── Withdraw application mutation ──
+  const withdrawMutation = useMutation({
+    mutationFn: async (applicationId: string) => {
+      const res = await apiFetch(`/applications/${applicationId}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const body = (await res.json()) as { error?: string };
+        throw new Error(body.error ?? 'Failed to withdraw application');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['my-applications'] });
+    },
+    onError: (err: Error) => {
+      setApplyError(err.message);
+    },
+  });
+
+  function confirmWithdraw(application: Application) {
+    const isFinal = (application.withdrawalCount ?? 0) + 1 >= MAX_WITHDRAWALS;
+    const message = isFinal
+      ? 'This is your final withdrawal. You will not be able to apply to this gig again. Withdraw anyway?'
+      : 'Withdraw your application? You can apply again once.';
+    if (window.confirm(message)) withdrawMutation.mutate(application.id);
+  }
+
+  if (loading || !user || isLoading) {
     return (
       <main className="min-h-screen bg-gray-50">
         <Header />
@@ -186,7 +227,7 @@ export default function GigDetailPage() {
         <Header />
         <div className="max-w-2xl mx-auto px-4 py-8 text-center text-gray-500">
           <p className="text-lg font-medium">Gig not found</p>
-          <Link href="/gigs" className="text-brand-600 hover:underline text-sm mt-2 inline-block">
+          <Link href="/" className="text-brand-600 hover:underline text-sm mt-2 inline-block">
             ← Back to board
           </Link>
         </div>
@@ -201,15 +242,8 @@ export default function GigDetailPage() {
     return false;
   };
 
-  const priceLabel = () => {
-    if (gig.priceType === 'negotiable') return '💬 Negotiable — discuss in person';
-    if (!canSeeField(gig.visPrice)) return null; // locked
-    if (gig.priceType === 'fixed' && gig.priceFixed) return `₾ ${gig.priceFixed}`;
-    if (gig.priceType === 'range' && gig.priceRangeMin && gig.priceRangeMax) {
-      return `₾ ${gig.priceRangeMin} – ₾ ${gig.priceRangeMax}`;
-    }
-    return null;
-  };
+  const priceLabel = () =>
+    gig.priceType === 'negotiable' ? '💬 Negotiable — discuss in person' : boardPriceLabel(gig);
 
   const workerFee =
     gig.priceType === 'fixed' && gig.priceFixed
@@ -225,22 +259,22 @@ export default function GigDetailPage() {
         {/* Main gig card */}
         <section className="bg-white rounded-xl p-6 border border-gray-100 space-y-4">
           <div className="flex items-start justify-between gap-2">
-            <h1 className="text-xl font-bold text-gray-900">{gig.shortDescription}</h1>
+            <h1 className="text-xl font-bold text-gray-900">{gig.title ?? gig.shortDescription}</h1>
             <StatusBadge status={gig.status} />
           </div>
+
+          {gig.title && <p className="text-gray-800 text-sm font-medium">{gig.shortDescription}</p>}
 
           {gig.longDescription && (
             <p className="text-gray-700 text-sm whitespace-pre-wrap">{gig.longDescription}</p>
           )}
 
           <dl className="grid grid-cols-2 gap-2 text-sm">
-            <Row label="Region" value={REGION_NAMES[gig.regionId] ?? `Region ${gig.regionId}`} />
+            <Row label="Region" value={gig.region?.nameEn ?? REGION_FALLBACK(gig.regionId)} />
 
-            {canSeeField(gig.visCity) && gig.cityId ? (
-              <Row label="City" value={`City #${gig.cityId}`} />
-            ) : !canSeeField(gig.visCity) ? (
-              <Row label="City" value="🔒 Verified users only" muted />
-            ) : null}
+            {gig.city && <Row label="City" value={gig.city.nameEn} />}
+
+            <Row label="Workers needed" value={String(gig.workersNeeded ?? 1)} />
 
             {canSeeField(gig.visAddress) && gig.streetAddress ? (
               <Row label="Address" value={gig.streetAddress} />
@@ -261,11 +295,7 @@ export default function GigDetailPage() {
 
           {/* Price */}
           <div className="pt-2 border-t border-gray-100">
-            {priceLabel() ? (
-              <p className="text-lg font-semibold text-brand-700">{priceLabel()}</p>
-            ) : (
-              <p className="text-sm text-gray-400">🔒 Price visible to verified users</p>
-            )}
+            <p className="text-lg font-semibold text-brand-700">{priceLabel()}</p>
             {workerFee && isVerified && !isPoster && (
               <p className="text-xs text-gray-400 mt-1">
                 Service fee upon completion: ₾ {workerFee} (2%)
@@ -307,15 +337,46 @@ export default function GigDetailPage() {
                         )}
                         <ApplicationStatusBadge status={app.status} />
                       </div>
-                      {app.status === 'pending' && gig.status === 'active' && (
-                        <button
-                          onClick={() => acceptMutation.mutate(app.id)}
-                          disabled={acceptMutation.isPending}
-                          className="shrink-0 rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60 transition-colors"
-                        >
-                          {acceptMutation.isPending ? 'Accepting…' : 'Accept'}
-                        </button>
-                      )}
+                      {app.status === 'pending' && gig.status === 'active' && (() => {
+                        const otherPending = applications.filter((a) => a.status === 'pending' && a.id !== app.id).length;
+                        if (choosingFor === app.id) {
+                          return (
+                            <div className="shrink-0 flex flex-col items-end gap-1.5 text-right">
+                              <p className="text-xs text-gray-600">
+                                Decline the other {otherPending} pending applicant{otherPending === 1 ? '' : 's'}?
+                              </p>
+                              <button
+                                onClick={() => acceptMutation.mutate({ applicationId: app.id, declineOthers: true })}
+                                disabled={acceptMutation.isPending}
+                                className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
+                              >
+                                Hire and decline others
+                              </button>
+                              <button
+                                onClick={() => acceptMutation.mutate({ applicationId: app.id, declineOthers: false })}
+                                disabled={acceptMutation.isPending}
+                                className="rounded-lg border border-brand-600 px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-50 disabled:opacity-60"
+                              >
+                                Hire and keep others
+                              </button>
+                              <button onClick={() => setChoosingFor(null)} className="text-xs text-gray-500 hover:text-gray-700">
+                                Cancel
+                              </button>
+                            </div>
+                          );
+                        }
+                        return (
+                          <button
+                            onClick={() => (otherPending > 0
+                              ? setChoosingFor(app.id)
+                              : acceptMutation.mutate({ applicationId: app.id, declineOthers: false }))}
+                            disabled={acceptMutation.isPending}
+                            className="shrink-0 rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60 transition-colors"
+                          >
+                            {acceptMutation.isPending ? 'Accepting…' : 'Accept'}
+                          </button>
+                        );
+                      })()}
                       {app.contract && (
                         <Link
                           href={`/contracts/${app.contract.id}`}
@@ -335,7 +396,7 @@ export default function GigDetailPage() {
         {/* ── Worker apply section ── */}
         {!isPoster && isVerified && gig.status === 'active' && (
           <section className="bg-white rounded-xl p-6 border border-gray-100 space-y-3">
-            {myApplicationForThisGig ? (
+            {myApplicationForThisGig && myApplicationForThisGig.status !== 'withdrawn' ? (
               <div>
                 <p className="text-sm font-medium text-gray-700">
                   You&apos;ve applied for this gig.
@@ -350,14 +411,27 @@ export default function GigDetailPage() {
                       View contract →
                     </Link>
                   )}
+                  {myApplicationForThisGig.status === 'pending' && (
+                    <button
+                      onClick={() => confirmWithdraw(myApplicationForThisGig)}
+                      disabled={withdrawMutation.isPending}
+                      className="block text-sm text-red-600 hover:underline disabled:opacity-60"
+                    >
+                      {withdrawMutation.isPending ? 'Withdrawing…' : 'Withdraw application'}
+                    </button>
+                  )}
                   <Link
-                    href="/gigs"
+                    href="/"
                     className="block text-sm text-gray-500 hover:text-brand-600"
                   >
                     ← Go back to list of gigs
                   </Link>
                 </div>
               </div>
+            ) : myApplicationForThisGig && (myApplicationForThisGig.withdrawalCount ?? 0) >= MAX_WITHDRAWALS ? (
+              <p className="text-sm text-gray-600">
+                You withdrew from this gig twice, so you can&apos;t apply to it again.
+              </p>
             ) : showApplyForm ? (
               <div className="space-y-3">
                 <h2 className="font-semibold text-gray-800">Apply</h2>
@@ -393,7 +467,7 @@ export default function GigDetailPage() {
                 onClick={() => { setApplyError(null); setShowApplyForm(true); }}
                 className="w-full rounded-lg bg-brand-600 px-4 py-3 font-semibold text-white hover:bg-brand-700 transition-colors"
               >
-                Apply for this gig
+                {myApplicationForThisGig ? 'Apply again' : 'Apply for this gig'}
               </button>
             )}
           </section>
@@ -402,29 +476,15 @@ export default function GigDetailPage() {
         {/* ── Prompt unverified users ── */}
         {!isPoster && !isVerified && gig.status === 'active' && (
           <section className="bg-white rounded-xl p-6 border border-gray-100 text-center">
-            {!user ? (
-              <>
-                <p className="text-sm text-gray-600 mb-3">Sign in to apply for this gig.</p>
-                <Link
-                  href={`/login?next=/gigs/${gig.id}`}
-                  className="rounded-lg bg-brand-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 transition-colors"
-                >
-                  Sign in
-                </Link>
-              </>
-            ) : (
-              <>
-                <p className="text-sm text-gray-600 mb-3">
-                  Verify your email to apply for gigs. Phone verification is optional.
-                </p>
-                <Link
-                  href={`/verify?next=${encodeURIComponent(`/gigs/${gig.id}`)}`}
-                  className="rounded-lg bg-brand-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 transition-colors"
-                >
-                  Verify email
-                </Link>
-              </>
-            )}
+            <p className="text-sm text-gray-600 mb-3">
+              Verify your email to apply for gigs. Phone verification is optional.
+            </p>
+            <Link
+              href={`/verify?next=${encodeURIComponent(`/gigs/${gig.id}`)}`}
+              className="rounded-lg bg-brand-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 transition-colors"
+            >
+              Verify email
+            </Link>
           </section>
         )}
       </div>
@@ -437,7 +497,7 @@ export default function GigDetailPage() {
 function Header() {
   return (
     <header className="bg-white border-b px-4 py-4">
-      <Link href="/gigs" className="text-gray-500 hover:text-brand-600 text-sm">
+      <Link href="/" className="text-gray-500 hover:text-brand-600 text-sm">
         ← Back to board
       </Link>
     </header>

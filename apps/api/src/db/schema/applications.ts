@@ -16,6 +16,7 @@ export const applications = pgTable('applications', {
   status: text('status').notNull().default('pending'), // 'pending'|'accepted'|'rejected'|'closed'|'withdrawn'
   message: text('message'),
   rejectionReason: text('rejection_reason'),
+  withdrawalCount: integer('withdrawal_count').notNull().default(0),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => ({

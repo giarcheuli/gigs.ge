@@ -13,6 +13,8 @@ import { regions, cities } from './regions';
 export const gigs = pgTable('gigs', {
   id: uuid('id').primaryKey().defaultRandom(),
   posterId: uuid('poster_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  // Nullable only for gigs created before 2026-10-20; the API requires it on create.
+  title: text('title'),
   shortDescription: text('short_description').notNull(),
   longDescription: text('long_description'),
   regionId: integer('region_id').notNull().references(() => regions.id),
@@ -24,8 +26,10 @@ export const gigs = pgTable('gigs', {
   priceRangeMax: numeric('price_range_max', { precision: 10, scale: 2 }),
   availableFrom: timestamp('available_from', { withTimezone: true }),
   availableTo: timestamp('available_to', { withTimezone: true }),
+  workersNeeded: integer('workers_needed').notNull().default(1),
   status: text('status').notNull().default('draft'), // 'draft'|'active'|'shelf'|'expired'|'archived'|'cancelled'
   visImages: text('vis_images').notNull().default('verified'),
+  // Deprecated 2026-10-20: city and price are always public; kept only to avoid a destructive migration.
   visPrice: text('vis_price').notNull().default('public'),
   visCity: text('vis_city').notNull().default('verified'),
   visAddress: text('vis_address').notNull().default('on_request'),

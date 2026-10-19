@@ -44,6 +44,7 @@ const makeToken = (overrides: Record<string, unknown> = {}) => signAccessToken({
 const draftGig = {
   id: '22222222-2222-2222-2222-222222222222',
   posterId: TEST_USER_ID,
+  title: 'Kitchen sink repair',
   shortDescription: 'Fix kitchen sink',
   longDescription: 'Need a plumber for a quick fix',
   regionId: 1,
@@ -55,6 +56,7 @@ const draftGig = {
   priceRangeMax: null,
   availableFrom: null,
   availableTo: null,
+  workersNeeded: 2,
   status: 'draft',
   visImages: 'verified',
   visPrice: 'public',
@@ -93,7 +95,8 @@ describe('Gigs Routes Integration', () => {
   });
 
   it('allows an email-verified poster with an unverified phone to create a draft gig', async () => {
-    mockDb.insert.mockReturnValueOnce(mockInsertReturning(draftGig));
+    const insert = mockInsertReturning(draftGig);
+    mockDb.insert.mockReturnValueOnce(insert);
 
     const app = await buildApp();
     const response = await app.inject({
@@ -101,6 +104,7 @@ describe('Gigs Routes Integration', () => {
       url: '/api/v1/gigs',
       headers: { authorization: `Bearer ${makeToken({ phoneVerified: false })}` },
       payload: {
+        title: draftGig.title,
         shortDescription: draftGig.shortDescription,
         longDescription: draftGig.longDescription,
         regionId: draftGig.regionId,
@@ -108,11 +112,16 @@ describe('Gigs Routes Integration', () => {
         streetAddress: draftGig.streetAddress,
         priceType: 'fixed',
         priceFixed: draftGig.priceFixed,
+        workersNeeded: 2,
       },
     });
     await app.close();
 
     expect(response.statusCode).toBe(201);
+    expect(insert.values).toHaveBeenCalledWith(expect.objectContaining({
+      title: draftGig.title,
+      workersNeeded: 2,
+    }));
     expect(response.json()).toEqual({
       gig: expect.objectContaining({
         ...draftGig,
@@ -146,6 +155,39 @@ describe('Gigs Routes Integration', () => {
       code: 'EMAIL_VERIFICATION_REQUIRED',
       statusCode: 403,
     });
+  });
+
+  it('rejects a gig without a title and a non-fixed price with 400', async () => {
+    const app = await buildApp();
+    const noTitle = await app.inject({
+      method: 'POST',
+      url: '/api/v1/gigs',
+      headers: { authorization: `Bearer ${makeToken()}` },
+      payload: {
+        shortDescription: draftGig.shortDescription,
+        regionId: draftGig.regionId,
+        priceType: 'fixed',
+        priceFixed: draftGig.priceFixed,
+      },
+    });
+    const negotiable = await app.inject({
+      method: 'POST',
+      url: '/api/v1/gigs',
+      headers: { authorization: `Bearer ${makeToken()}` },
+      payload: {
+        title: draftGig.title,
+        shortDescription: draftGig.shortDescription,
+        regionId: draftGig.regionId,
+        priceType: 'negotiable',
+      },
+    });
+    await app.close();
+
+    expect(noTitle.statusCode).toBe(400);
+    expect(noTitle.json()).toMatchObject({ error: 'Invalid request', statusCode: 400 });
+    expect(negotiable.statusCode).toBe(400);
+    expect(negotiable.json()).toEqual({ error: 'Only fixed-price gigs can be posted for now', statusCode: 400 });
+    expect(mockDb.insert).not.toHaveBeenCalled();
   });
 
   it('allows the poster to update their draft gig', async () => {
@@ -199,8 +241,14 @@ describe('Gigs Routes Integration', () => {
     });
   });
 
-  it('lists and fetches only visible gigs', async () => {
-    const visibleGigs = [{ ...draftGig, status: 'active' }];
+  it('lists gigs publicly with city and price, and requires login for detail', async () => {
+    const visibleGigs = [{
+      ...draftGig,
+      status: 'active',
+      region: { id: 1, nameEn: 'Tbilisi' },
+      city: { id: 2, nameEn: 'Tbilisi' },
+    }];
+    const viewerToken = makeToken({ sub: '33333333-3333-3333-3333-333333333333', emailVerified: false });
 
     mockDb.query.gigs.findMany.mockResolvedValueOnce(visibleGigs);
     mockDb.query.gigs.findFirst
@@ -214,35 +262,52 @@ describe('Gigs Routes Integration', () => {
       url: '/api/v1/gigs',
     });
 
+    const anonymousDetail = await app.inject({
+      method: 'GET',
+      url: `/api/v1/gigs/${draftGig.id}`,
+    });
+
     const getResponse = await app.inject({
       method: 'GET',
       url: `/api/v1/gigs/${draftGig.id}`,
+      headers: { authorization: `Bearer ${viewerToken}` },
     });
 
     const notFoundResponse = await app.inject({
       method: 'GET',
       url: '/api/v1/gigs/33333333-3333-3333-3333-333333333333',
+      headers: { authorization: `Bearer ${viewerToken}` },
     });
 
     await app.close();
 
     expect(listResponse.statusCode).toBe(200);
-    expect(listResponse.json().data[0]).toMatchObject({
+    const listed = listResponse.json().data[0];
+    expect(listed).toMatchObject({
       shortDescription: visibleGigs[0].shortDescription,
       longDescription: null,
       priceFixed: visibleGigs[0].priceFixed,
-      cityId: null,
+      cityId: visibleGigs[0].cityId,
+      city: { id: 2, nameEn: 'Tbilisi' },
+      region: { id: 1, nameEn: 'Tbilisi' },
       streetAddress: null,
       availableFrom: null,
       availableTo: null,
     });
-    expect(listResponse.json().data[0].streetAddress).not.toBe(visibleGigs[0].streetAddress);
+    expect(listed).not.toHaveProperty('visPrice');
+    expect(listed).not.toHaveProperty('visCity');
+    expect(mockDb.query.gigs.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      with: { region: true, city: true },
+    }));
+
+    expect(anonymousDetail.statusCode).toBe(401);
 
     expect(getResponse.statusCode).toBe(200);
     expect(getResponse.json()).toMatchObject({
       gig: expect.objectContaining({
-        longDescription: null,
-        cityId: null,
+        longDescription: visibleGigs[0].longDescription,
+        cityId: visibleGigs[0].cityId,
+        priceFixed: visibleGigs[0].priceFixed,
         streetAddress: null,
       }),
     });
@@ -252,5 +317,43 @@ describe('Gigs Routes Integration', () => {
       error: 'Gig not found',
       statusCode: 404,
     });
+  });
+
+  it('pages the board with an opaque cursor', async () => {
+    const newer = { ...draftGig, id: '44444444-4444-4444-4444-444444444444', status: 'active', createdAt: new Date('2026-05-03T00:00:00.000Z') };
+    const older = { ...draftGig, id: '55555555-5555-5555-5555-555555555555', status: 'active', createdAt: new Date('2026-05-02T00:00:00.000Z') };
+
+    mockDb.query.gigs.findMany
+      .mockResolvedValueOnce([newer, older])
+      .mockResolvedValueOnce([older]);
+
+    const app = await buildApp();
+    const first = await app.inject({ method: 'GET', url: '/api/v1/gigs?limit=1&regionId=1&priceMin=50&priceMax=200' });
+    const nextCursor = first.json().nextCursor as string;
+    const second = await app.inject({ method: 'GET', url: `/api/v1/gigs?limit=1&cursor=${encodeURIComponent(nextCursor)}` });
+    await app.close();
+
+    expect(first.statusCode).toBe(200);
+    expect(first.json().data.map((gig: { id: string }) => gig.id)).toEqual([newer.id]);
+    expect(typeof nextCursor).toBe('string');
+    expect(mockDb.query.gigs.findMany).toHaveBeenNthCalledWith(1, expect.objectContaining({ limit: 2 }));
+
+    expect(second.statusCode).toBe(200);
+    expect(second.json().data.map((gig: { id: string }) => gig.id)).toEqual([older.id]);
+    expect(second.json().nextCursor).toBeNull();
+  });
+
+  it('rejects invalid board filters and cursors with 400', async () => {
+    const app = await buildApp();
+    const badRegion = await app.inject({ method: 'GET', url: '/api/v1/gigs?regionId=abc' });
+    const badCursor = await app.inject({ method: 'GET', url: '/api/v1/gigs?cursor=not-a-cursor' });
+    const badRange = await app.inject({ method: 'GET', url: '/api/v1/gigs?priceMin=50&priceMax=10' });
+    await app.close();
+
+    expect(badRegion.statusCode).toBe(400);
+    expect(badCursor.statusCode).toBe(400);
+    expect(badCursor.json()).toEqual({ error: 'Invalid cursor', statusCode: 400 });
+    expect(badRange.statusCode).toBe(400);
+    expect(mockDb.query.gigs.findMany).not.toHaveBeenCalled();
   });
 });

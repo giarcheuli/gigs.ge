@@ -629,18 +629,20 @@ Fees below **1.00 GEL** are not invoiced. They carry over to the next month's cy
 
 | Data Point | Visitor | Auth Unverified | Auth Verified | Post-Contract |
 |-----------|---------|-----------------|--------------|---------------|
-| Short description | ✅ | ✅ | ✅ | ✅ |
-| Long description | ❌ | ❌ | ✅ | ✅ |
+| Title / short description | ✅ | ✅ | ✅ | ✅ |
+| Long description | ❌ | ✅ | ✅ | ✅ |
 | Images (preview) | ✅ | ✅ | ✅ | ✅ |
 | Images (full gallery) | ❌ | ❌ | ✅* | ✅ |
-| Price | ✅ | ✅ | ✅* | ✅ |
+| Price | ✅ | ✅ | ✅ | ✅ |
 | Region | ✅ | ✅ | ✅ | ✅ |
-| City | ❌ | ❌ | ✅* | ✅ |
+| City | ✅ | ✅ | ✅ | ✅ |
 | Full address | ❌ | ❌ | on-request* | ✅ |
 | Poster name | ❌ | ❌ | on-request* | ✅ |
 | Contact info | ❌ | ❌ | on-request* | ✅ (active contracts only) |
 
 \* Poster can change default via per-field toggle.
+
+**Product decision 2026-10-20:** price and city are always public so the homepage board is useful to visitors. The `vis_price` and `vis_city` columns are deprecated and ignored. The gig detail page requires login. See [docs/specs/feat-public-gig-board.md](docs/specs/feat-public-gig-board.md).
 
 ### 11.3 Contact Info Sharing
 
@@ -769,17 +771,19 @@ updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
 ```sql
 id                  UUID PRIMARY KEY DEFAULT gen_random_uuid()
 poster_id           UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
+title               TEXT CHECK (char_length(title) <= 80)  -- required by the API since 2026-10-20; NULL only on older gigs
 short_description   TEXT NOT NULL CHECK (char_length(short_description) <= 160)
 long_description    TEXT
 region_id           INT  NOT NULL REFERENCES regions(id)
 city_id             INT  REFERENCES cities(id)
 street_address      TEXT
-price_type          TEXT NOT NULL                -- 'fixed' | 'range' | 'negotiable'
+price_type          TEXT NOT NULL                -- 'fixed' | 'range' | 'negotiable'; new gigs: 'fixed' only until negotiation exists
 price_fixed         NUMERIC(10,2)
 price_range_min     NUMERIC(10,2)
 price_range_max     NUMERIC(10,2)
 available_from      TIMESTAMPTZ                  -- datetime (not just date)
 available_to        TIMESTAMPTZ                  -- datetime (not just date)
+workers_needed      INT  NOT NULL DEFAULT 1      -- poster's estimate; hiring more or fewer is allowed
 status              TEXT NOT NULL DEFAULT 'draft' -- 'draft'|'active'|'shelf'|'expired'|'archived'|'cancelled'
 vis_images          TEXT NOT NULL DEFAULT 'verified'
 vis_price           TEXT NOT NULL DEFAULT 'public'
@@ -812,10 +816,13 @@ applicant_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
 status          TEXT NOT NULL DEFAULT 'pending' -- 'pending'|'accepted'|'rejected'|'closed'|'withdrawn'
 message         TEXT
 rejection_reason TEXT                              -- free text; visible only to poster
+withdrawal_count INT NOT NULL DEFAULT 0            -- re-apply allowed once; the second withdrawal is final
 created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 UNIQUE (gig_id, applicant_id)
 ```
+
+**Hiring rules (2026-10-20):** a gig may hire several workers (`gigs.workers_needed` is an estimate, not a cap). When accepting an applicant, the poster chooses whether to decline the other pending applicants (`POST /applications/:id/accept` with `{ "declineOthers": true }`); declined applicants get an `application_declined` notification. A worker who withdraws may re-apply once, which reopens the same application row; the UI warns before the second, final withdrawal. See [docs/specs/feat-public-gig-board.md](docs/specs/feat-public-gig-board.md).
 
 ### 14.6 `application_attachments`
 
@@ -1066,8 +1073,8 @@ UNIQUE (gig_id, reporter_id)
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| GET | `/gigs` | ❌ | List active gigs (board view) |
-| GET | `/gigs/:id` | ❌ | Single gig (visibility rules) |
+| GET | `/gigs` | ❌ | List active gigs (board view). Query: `regionId`, `cityId`, `priceMin`, `priceMax`, `limit` (1–50, default 20), `cursor`. Newest first; returns `{ data, nextCursor }` |
+| GET | `/gigs/:id` | ✅ | Single gig (visibility rules); login required since 2026-10-20 |
 | POST | `/gigs` | ✅ verified | Create gig |
 | PATCH | `/gigs/:id` | ✅ owner | Update gig |
 | POST | `/gigs/:id/publish` | ✅ owner | Publish draft |

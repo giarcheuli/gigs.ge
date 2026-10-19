@@ -1,7 +1,8 @@
 import type { FastifyInstance } from 'fastify';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, ne, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { createApplicationSchema } from '@gigs/shared/schemas';
+import { MAX_APPLICATION_WITHDRAWALS } from '@gigs/shared/constants';
 import { db } from '../../db/index.js';
 import { applications, contracts, gigs, notifications } from '../../db/schema/index.js';
 import { requireAuth, requireEmailVerified } from '../../middleware/guards.js';
@@ -12,6 +13,11 @@ const applicationIdParamsSchema = z.object({ id: z.string().uuid() });
 const createApplicationInputSchema = createApplicationSchema.extend({
   gigId: z.string().uuid(),
 });
+const acceptApplicationBodySchema = z.object({
+  declineOthers: z.boolean().default(false),
+});
+
+const gigName = (gig: { title: string | null; shortDescription: string }) => gig.title ?? gig.shortDescription;
 
 export async function applicationsRoutes(app: FastifyInstance) {
   app.post('/', { preHandler: [requireEmailVerified] }, async (request, reply) => {
@@ -34,7 +40,39 @@ export async function applicationsRoutes(app: FastifyInstance) {
     });
 
     if (existingApplication) {
-      return reply.status(409).send({ error: 'Application already exists for this gig', statusCode: 409 });
+      if (existingApplication.status !== 'withdrawn') {
+        return reply.status(409).send({ error: 'Application already exists for this gig', statusCode: 409 });
+      }
+      if (existingApplication.withdrawalCount >= MAX_APPLICATION_WITHDRAWALS) {
+        return reply.status(409).send({
+          error: 'You withdrew from this gig twice and cannot apply again',
+          code: 'REAPPLY_LIMIT_REACHED',
+          statusCode: 409,
+        });
+      }
+
+      const [reactivated] = await db.update(applications)
+        .set({ status: 'pending', message: body.message ?? null, updatedAt: new Date() })
+        .where(and(eq(applications.id, existingApplication.id), eq(applications.status, 'withdrawn')))
+        .returning();
+
+      if (!reactivated) {
+        return reply.status(409).send({ error: 'Application already exists for this gig', statusCode: 409 });
+      }
+
+      await db.insert(notifications).values({
+        recipientId: gig.posterId,
+        type: 'application_submitted',
+        payload: {
+          applicationId: reactivated.id,
+          gigId: gig.id,
+          gigName: gigName(gig),
+          applicantId: request.user.sub,
+          reapplied: true,
+        },
+      });
+
+      return reply.status(201).send({ application: reactivated, reapplied: true });
     }
 
     const [application] = await db.insert(applications).values({
@@ -51,7 +89,7 @@ export async function applicationsRoutes(app: FastifyInstance) {
       payload: {
         applicationId: application.id,
         gigId: gig.id,
-        gigName: gig.shortDescription,
+        gigName: gigName(gig),
         applicantId: request.user.sub,
       },
     });
@@ -84,6 +122,7 @@ export async function applicationsRoutes(app: FastifyInstance) {
 
   app.post('/:id/accept', { preHandler: [requireAuth] }, async (request, reply) => {
     const params = applicationIdParamsSchema.parse(request.params);
+    const body = acceptApplicationBodySchema.parse(request.body ?? {});
 
     const application = await db.query.applications.findFirst({
       where: eq(applications.id, params.id),
@@ -128,7 +167,7 @@ export async function applicationsRoutes(app: FastifyInstance) {
       return reply.status(409).send({ error: 'Application has already been accepted', statusCode: 409 });
     }
 
-    const [acceptedApplication, contract] = await db.transaction(async (tx) => {
+    const [acceptedApplication, contract, declined] = await db.transaction(async (tx) => {
       const [updatedApplication] = await tx.update(applications)
         .set({ status: 'accepted', updatedAt: new Date() })
         .where(eq(applications.id, application.id))
@@ -145,10 +184,35 @@ export async function applicationsRoutes(app: FastifyInstance) {
         status: 'draft',
       }).returning();
 
-      return [updatedApplication, createdContract] as const;
+      // The poster chooses whether hiring one worker closes the door for the rest (spec D9).
+      const declinedApplications = body.declineOthers
+        ? await tx.update(applications)
+          .set({ status: 'rejected', rejectionReason: 'The poster filled this gig', updatedAt: new Date() })
+          .where(and(
+            eq(applications.gigId, application.gigId),
+            eq(applications.status, 'pending'),
+            ne(applications.id, application.id),
+          ))
+          .returning()
+        : [];
+
+      await tx.insert(notifications).values([
+        {
+          recipientId: application.applicantId,
+          type: 'application_accepted',
+          payload: { applicationId: application.id, gigId: gig.id, gigName: gigName(gig), contractId: createdContract.id },
+        },
+        ...declinedApplications.map((declinedApplication) => ({
+          recipientId: declinedApplication.applicantId,
+          type: 'application_declined',
+          payload: { applicationId: declinedApplication.id, gigId: gig.id, gigName: gigName(gig) },
+        })),
+      ]);
+
+      return [updatedApplication, createdContract, declinedApplications] as const;
     });
 
-    return reply.send({ application: acceptedApplication, contract });
+    return reply.send({ application: acceptedApplication, contract, declinedCount: declined.length });
   });
 
   /**
@@ -202,10 +266,21 @@ export async function applicationsRoutes(app: FastifyInstance) {
 
     const [updated] = await db
       .update(applications)
-      .set({ status: 'withdrawn', updatedAt: new Date() })
-      .where(eq(applications.id, params.id))
+      .set({
+        status: 'withdrawn',
+        withdrawalCount: sql`${applications.withdrawalCount} + 1`,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(applications.id, params.id), eq(applications.status, 'pending')))
       .returning();
 
-    return reply.send({ application: updated });
+    if (!updated) {
+      return reply.status(409).send({ error: 'Only pending applications can be withdrawn', statusCode: 409 });
+    }
+
+    return reply.send({
+      application: updated,
+      canReapply: updated.withdrawalCount < MAX_APPLICATION_WITHDRAWALS,
+    });
   });
 }

@@ -15,6 +15,8 @@ export type PriceType = (typeof PRICE_TYPES)[number];
 // ── Application ──
 export const APPLICATION_STATUSES = ['pending', 'accepted', 'rejected', 'closed', 'withdrawn'] as const;
 export type ApplicationStatus = (typeof APPLICATION_STATUSES)[number];
+// A worker may re-apply once; the second withdrawal is final.
+export const MAX_APPLICATION_WITHDRAWALS = 2;
 
 // ── Contract ──
 export const CONTRACT_STATUSES = [
@@ -102,6 +104,9 @@ export const NOTIFICATION_TYPES = [
   'cancellation_declined',
   'cancellation_withdrawn',
   'cancellation_superseded',
+  'application_submitted',
+  'application_accepted',
+  'application_declined',
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
@@ -139,5 +144,7 @@ export const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
 export const MAX_DISPUTE_EVIDENCE_FILES = 10;
 export const MAX_SHORT_BIO_LENGTH = 280;
 export const MAX_SHORT_DESCRIPTION_LENGTH = 160;
+export const MAX_GIG_TITLE_LENGTH = 80;
+export const MAX_WORKERS_NEEDED = 100;
 export const MAX_GIG_EXPIRY_DAYS = 30;
 export const ARBITER_FAULT_BLOCK_THRESHOLD = 2;

@@ -28,18 +28,20 @@ const context = (overrides: Record<string, unknown> = {}) => ({
 });
 
 describe('presentGig visibility projection', () => {
-  it('removes restricted values from a visitor response', () => {
+  it('removes restricted values from a visitor response but keeps city and price public', () => {
     const result = presentGig(gig, context());
 
     expect(result).toMatchObject({
       shortDescription: gig.shortDescription,
       longDescription: null,
-      priceFixed: null,
-      cityId: null,
+      priceFixed: gig.priceFixed,
+      cityId: gig.cityId,
       streetAddress: null,
       availableFrom: null,
       availableTo: null,
     });
+    expect(result).not.toHaveProperty('visPrice');
+    expect(result).not.toHaveProperty('visCity');
     expect(JSON.stringify(result)).not.toContain(gig.streetAddress);
     expect(JSON.stringify(result)).not.toContain(gig.longDescription);
   });
@@ -64,7 +66,7 @@ describe('presentGig visibility projection', () => {
 
     expect(active.longDescription).toBe(gig.longDescription);
     expect(active.availableFrom).toBe(gig.availableFrom);
-    expect(terminal.longDescription).toBeNull();
+    expect(terminal.longDescription).toBe(gig.longDescription);
     expect(terminal.availableFrom).toBeNull();
   });
 

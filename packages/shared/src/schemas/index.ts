@@ -5,6 +5,8 @@ import {
   PRICE_TYPES,
   VISIBILITY_LEVELS,
   MAX_SHORT_DESCRIPTION_LENGTH,
+  MAX_GIG_TITLE_LENGTH,
+  MAX_WORKERS_NEEDED,
   MAX_SHORT_BIO_LENGTH,
 } from '../constants/index.js';
 
@@ -60,6 +62,7 @@ export const updateProfileSchema = z.object({
 
 // ── Gig ──
 export const createGigSchema = z.object({
+  title: z.string().trim().min(1).max(MAX_GIG_TITLE_LENGTH),
   shortDescription: z.string().min(1).max(MAX_SHORT_DESCRIPTION_LENGTH),
   longDescription: z.string().max(5000).nullish(),
   regionId: z.number().int().positive(),
@@ -71,9 +74,8 @@ export const createGigSchema = z.object({
   priceRangeMax: z.string().regex(/^\d+(\.\d{1,2})?$/).nullish(),
   availableFrom: isoDatetime.nullish(),
   availableTo: isoDatetime.nullish(),
+  workersNeeded: z.number().int().min(1).max(MAX_WORKERS_NEEDED).optional(),
   visImages: z.enum(VISIBILITY_LEVELS).optional(),
-  visPrice: z.enum(VISIBILITY_LEVELS).optional(),
-  visCity: z.enum(VISIBILITY_LEVELS).optional(),
   visAddress: z.enum(VISIBILITY_LEVELS).optional(),
   visContact: z.enum(VISIBILITY_LEVELS).optional(),
   visDates: z.enum(VISIBILITY_LEVELS).optional(),
