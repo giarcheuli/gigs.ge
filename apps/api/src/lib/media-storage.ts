@@ -13,7 +13,8 @@ export async function putMediaObject(objectName: string, data: Buffer, contentTy
   await bucket().file(objectName).save(data, {
     resumable: false,
     contentType,
-    metadata: { cacheControl: 'public, max-age=31536000, immutable' },
+    // Short cache: a photo the poster removes must stop being served soon (Google's edge cache honours this).
+    metadata: { cacheControl: 'public, max-age=3600' },
   });
   return `https://storage.googleapis.com/${env.MEDIA_BUCKET}/${objectName}`;
 }

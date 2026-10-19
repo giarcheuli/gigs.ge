@@ -63,6 +63,7 @@ sequenceDiagram
 - Buckets: `gigsge-dev-media`, `gigsge-uat-media` (public read; objects have unguessable UUID names)
 - Objects: `gigs/{gigId}/images/{uuid}.webp` and `{uuid}-thumb.webp`
 - Each API identity can write only to its own environment's bucket
+- Files are served with `Cache-Control: public, max-age=3600`. A removed photo is deleted from the bucket at once, but browsers and Google's edge cache may keep serving it for up to an hour. A year-long cache was tried first and rejected for that reason (verified on UAT 2026-10-20)
 - `MEDIA_BUCKET` env var, set from the Cloud Build trigger substitution `_MEDIA_BUCKET`. Empty locally, which makes uploads answer 503
 
 ## Out of scope (follow-ups)
