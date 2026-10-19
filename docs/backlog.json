@@ -144,9 +144,10 @@
     {
       "task": "Create a platform_settings store so contract timeframes (48h auto-complete, 24h grace, 14d overdue, 7d dispute auto-resolve) and fee percentages (3% poster / 2% worker) are runtime-configurable, with admin API to read and update them.",
       "priority": "high",
-      "status": "in_progress",
+      "status": "done",
       "phase": "m2_deal_lifecycle",
-      "notes": "Backend implementation is on feat/configurable-contract-settings; not merged or deployed. Spec: docs/specs/feat-configurable-contract-settings.md on that branch. Admin UI, timers, and billing integrations remain separate tasks."
+      "completedAt": "2026-10-19",
+      "notes": "Backend merged to dev from feat/configurable-platform-settings. Admin-only GET/PATCH /api/v1/admin/settings with audit history; contracts snapshot settings when both parties sign; worker-quit grace uses the snapshot. Cancellation stays mutual and fee-free (PR #19). Spec: docs/specs/feat-configurable-contract-settings.md. Admin UI, timers, and billing consumers remain separate tasks."
     },
     {
       "task": "Align registration, web prompts, shared guards, and API access checks so email verification is mandatory for posting/applying and phone verification is optional; cover all verification/error states.",

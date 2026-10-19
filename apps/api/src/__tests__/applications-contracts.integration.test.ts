@@ -15,6 +15,9 @@ jest.mock('../db/index.js', () => ({
       infoRequests: {
         findMany: jest.fn(),
       },
+      platformSettings: {
+        findFirst: jest.fn(),
+      },
       users: {
         findFirst: jest.fn(),
       },
@@ -39,6 +42,7 @@ const mockDb = db as unknown as {
     applications: { findFirst: jest.Mock; findMany: jest.Mock };
     contracts: { findFirst: jest.Mock; findMany: jest.Mock };
     infoRequests: { findMany: jest.Mock };
+    platformSettings: { findFirst: jest.Mock };
     users: { findFirst: jest.Mock };
   };
   insert: jest.Mock;
@@ -99,6 +103,13 @@ const contractDraft = {
   arbiterDecision: null,
   arbiterNotes: null,
   arbiterDecidedAt: null,
+  posterFeePercentSnapshot: '3.00',
+  workerFeePercentSnapshot: '2.00',
+  cancelGraceHoursSnapshot: 24,
+  completionResponseHoursSnapshot: 48,
+  overdueAutoCompleteDaysSnapshot: 14,
+  disputeArbiterUnlockHoursSnapshot: 24,
+  disputeAutoResolveDaysSnapshot: 7,
   createdAt: new Date('2026-05-01T10:06:00.000Z'),
   updatedAt: new Date('2026-05-01T10:06:00.000Z'),
 };
@@ -164,6 +175,7 @@ describe('Applications + Contracts Routes Integration', () => {
     mockDb.query.contracts.findFirst.mockReset();
     mockDb.query.contracts.findMany.mockReset().mockResolvedValue([]);
     mockDb.query.infoRequests.findMany.mockReset().mockResolvedValue([]);
+    mockDb.query.platformSettings.findFirst.mockReset();
     mockDb.query.users.findFirst.mockReset();
     mockDb.insert.mockReset();
     mockDb.update.mockReset();
@@ -360,17 +372,36 @@ describe('Applications + Contracts Routes Integration', () => {
       ...posterSignedContract,
       workerSignedAt: new Date('2026-05-01T10:08:00.000Z'),
       status: 'in_progress',
+      posterFeePercentSnapshot: '4.50',
+      workerFeePercentSnapshot: '1.50',
+      cancelGraceHoursSnapshot: 12,
+      completionResponseHoursSnapshot: 36,
+      overdueAutoCompleteDaysSnapshot: 10,
+      disputeArbiterUnlockHoursSnapshot: 18,
+      disputeAutoResolveDaysSnapshot: 5,
       updatedAt: new Date('2026-05-01T10:08:00.000Z'),
     };
+    const secondSignUpdate = mockUpdateReturning(bothSignedContract);
 
     // GET /:id returns hydrated shape; sign endpoints use plain shape
     mockDb.query.contracts.findFirst
       .mockResolvedValueOnce(contractDraftHydrated)  // GET fetch
       .mockResolvedValueOnce(contractDraft)           // POST sign (poster)
       .mockResolvedValueOnce(posterSignedContract);   // POST sign (worker)
+    mockDb.query.platformSettings.findFirst.mockResolvedValueOnce({
+      posterFeePercent: '4.50',
+      workerFeePercent: '1.50',
+      cancelGraceHours: 12,
+      completionResponseHours: 36,
+      overdueAutoCompleteDays: 10,
+      disputeArbiterUnlockHours: 18,
+      disputeAutoResolveDays: 5,
+      updatedAt: new Date('2026-05-01T10:00:00.000Z'),
+      updatedBy: null,
+    });
     mockDb.update
       .mockReturnValueOnce(mockUpdateReturning(posterSignedContract))
-      .mockReturnValueOnce(mockUpdateReturning(bothSignedContract));
+      .mockReturnValueOnce(secondSignUpdate);
 
     const app = await buildApp();
 
@@ -430,6 +461,15 @@ describe('Applications + Contracts Routes Integration', () => {
         updatedAt: bothSignedContract.updatedAt.toISOString(),
       }),
     });
+    expect(secondSignUpdate.set).toHaveBeenCalledWith(expect.objectContaining({
+      posterFeePercentSnapshot: '4.50',
+      workerFeePercentSnapshot: '1.50',
+      cancelGraceHoursSnapshot: 12,
+      completionResponseHoursSnapshot: 36,
+      overdueAutoCompleteDaysSnapshot: 10,
+      disputeArbiterUnlockHoursSnapshot: 18,
+      disputeAutoResolveDaysSnapshot: 5,
+    }));
   });
 
   it('redacts post-contract fields after the contract reaches a terminal state', async () => {
@@ -901,6 +941,73 @@ describe('Applications + Contracts Routes Integration', () => {
 
     expect(response.statusCode).toBe(403);
     expect(tx.update).not.toHaveBeenCalled();
+  });
+
+  it('uses the saved grace duration and excludes the exact boundary', async () => {
+    const fixedNow = new Date('2026-05-11T12:00:00.000Z').getTime();
+    const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(fixedNow);
+    const boundaryContract = {
+      ...inProgressContract,
+      posterSignedAt: new Date(fixedNow - 60 * 60 * 1000),
+      workerSignedAt: new Date(fixedNow - 60 * 60 * 1000),
+      cancelGraceHoursSnapshot: 1,
+    };
+    const quit = {
+      ...boundaryContract,
+      status: 'quit',
+      quitAt: new Date(fixedNow),
+      feeEligible: true,
+      updatedAt: new Date(fixedNow),
+    };
+
+    mockDb.query.contracts.findFirst.mockResolvedValueOnce(boundaryContract);
+    mockDb.update.mockReturnValueOnce(mockUpdateReturning(quit));
+
+    const app = await buildApp();
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/v1/contracts/${boundaryContract.id}/quit`,
+      headers: { authorization: `Bearer ${makeToken(WORKER_ID)}` },
+    });
+    await app.close();
+    nowSpy.mockRestore();
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().quitNoFee).toBe(false);
+    expect(response.json().contract.feeEligible).toBe(true);
+  });
+
+  it('uses a configured grace duration that differs from the 24-hour default', async () => {
+    const fixedNow = new Date('2026-05-11T12:00:00.000Z').getTime();
+    const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(fixedNow);
+    const contract = {
+      ...inProgressContract,
+      posterSignedAt: new Date(fixedNow - 13 * 60 * 60 * 1000),
+      workerSignedAt: new Date(fixedNow - 13 * 60 * 60 * 1000),
+      cancelGraceHoursSnapshot: 12,
+    };
+    const quit = {
+      ...contract,
+      status: 'quit',
+      quitAt: new Date(fixedNow),
+      feeEligible: true,
+      updatedAt: new Date(fixedNow),
+    };
+
+    mockDb.query.contracts.findFirst.mockResolvedValueOnce(contract);
+    mockDb.update.mockReturnValueOnce(mockUpdateReturning(quit));
+
+    const app = await buildApp();
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/v1/contracts/${contract.id}/quit`,
+      headers: { authorization: `Bearer ${makeToken(WORKER_ID)}` },
+    });
+    await app.close();
+    nowSpy.mockRestore();
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().quitNoFee).toBe(false);
   });
 
   it('blocks cancellation from non-parties', async () => {
