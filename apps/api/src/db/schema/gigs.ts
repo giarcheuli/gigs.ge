@@ -26,6 +26,7 @@ export const gigs = pgTable('gigs', {
   availableTo: timestamp('available_to', { withTimezone: true }),
   status: text('status').notNull().default('draft'), // 'draft'|'active'|'shelf'|'expired'|'archived'|'cancelled'
   visImages: text('vis_images').notNull().default('verified'),
+  // Deprecated 2026-10-20: city and price are always public; kept only to avoid a destructive migration.
   visPrice: text('vis_price').notNull().default('public'),
   visCity: text('vis_city').notNull().default('verified'),
   visAddress: text('vis_address').notNull().default('on_request'),

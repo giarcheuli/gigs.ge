@@ -72,8 +72,6 @@ export const createGigSchema = z.object({
   availableFrom: isoDatetime.nullish(),
   availableTo: isoDatetime.nullish(),
   visImages: z.enum(VISIBILITY_LEVELS).optional(),
-  visPrice: z.enum(VISIBILITY_LEVELS).optional(),
-  visCity: z.enum(VISIBILITY_LEVELS).optional(),
   visAddress: z.enum(VISIBILITY_LEVELS).optional(),
   visContact: z.enum(VISIBILITY_LEVELS).optional(),
   visDates: z.enum(VISIBILITY_LEVELS).optional(),

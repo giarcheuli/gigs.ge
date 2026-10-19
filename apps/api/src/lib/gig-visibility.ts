@@ -18,8 +18,6 @@ type VisibleGig = {
   id: string;
   posterId: string;
   priceType: string;
-  visPrice: string;
-  visCity: string;
   visAddress: string;
   visDates: string;
   longDescription: string | null;
@@ -77,7 +75,7 @@ export async function loadGigVisibilityContext(viewer: GigViewer | null, gigIds:
   return { viewer, activeGigIds, grantedFields };
 }
 
-export function presentGig<T extends VisibleGig>(gig: T, context: GigVisibilityContext | null | undefined): T {
+export function presentGig<T extends VisibleGig>(gig: T, context: GigVisibilityContext | null | undefined): Omit<T, 'visPrice' | 'visCity'> {
   const safeContext = isVisibilityContext(context) ? context : {
     viewer: null,
     activeGigIds: new Set<string>(),
@@ -100,18 +98,18 @@ export function presentGig<T extends VisibleGig>(gig: T, context: GigVisibilityC
     }
   };
 
-  const longDescriptionVisible = isOwnerOrAdmin || Boolean(viewer?.emailVerified) || hasActiveContract;
-  const priceVisible = gig.priceType === 'negotiable' || canSee(gig.visPrice, 'price');
+  // Long description is behind login, not behind email verification (product decision 2026-10-20).
+  const longDescriptionVisible = Boolean(viewer) || hasActiveContract;
 
-  return {
+  // City and price are always public (product decision 2026-10-20); vis_price/vis_city are deprecated.
+  const presented: Record<string, unknown> = {
     ...gig,
     longDescription: longDescriptionVisible ? gig.longDescription : null,
-    priceFixed: priceVisible ? gig.priceFixed : null,
-    priceRangeMin: priceVisible ? gig.priceRangeMin : null,
-    priceRangeMax: priceVisible ? gig.priceRangeMax : null,
-    cityId: canSee(gig.visCity, 'city') ? gig.cityId : null,
     streetAddress: canSee(gig.visAddress, 'address') ? gig.streetAddress : null,
     availableFrom: canSee(gig.visDates, 'dates') ? gig.availableFrom : null,
     availableTo: canSee(gig.visDates, 'dates') ? gig.availableTo : null,
   };
+  delete presented.visPrice;
+  delete presented.visCity;
+  return presented as Omit<T, 'visPrice' | 'visCity'>;
 }

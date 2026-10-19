@@ -257,8 +257,8 @@ describe('Applications + Contracts Routes Integration', () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.json().data[0].gig).toMatchObject({
-      longDescription: null,
-      cityId: null,
+      longDescription: applicationGig.longDescription,
+      cityId: applicationGig.cityId,
       streetAddress: null,
     });
     expect(JSON.stringify(response.json())).not.toContain(applicationGig.streetAddress);
@@ -523,15 +523,15 @@ describe('Applications + Contracts Routes Integration', () => {
       cityId: gigWithContractVisibility.cityId,
       streetAddress: gigWithContractVisibility.streetAddress,
       availableFrom: gigWithContractVisibility.availableFrom.toISOString(),
-      priceFixed: null,
+      priceFixed: gigWithContractVisibility.priceFixed,
     });
     expect(terminalResponse.statusCode).toBe(200);
     expect(terminalResponse.json().contract.gig).toMatchObject({
-      longDescription: null,
-      cityId: null,
+      longDescription: gigWithContractVisibility.longDescription,
+      cityId: gigWithContractVisibility.cityId,
       streetAddress: null,
       availableFrom: null,
-      priceFixed: null,
+      priceFixed: gigWithContractVisibility.priceFixed,
     });
     expect(JSON.stringify(terminalResponse.json())).not.toContain(gigWithContractVisibility.streetAddress);
   });

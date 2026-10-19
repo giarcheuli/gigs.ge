@@ -65,8 +65,6 @@ export async function gigsRoutes(app: FastifyInstance) {
       availableFrom: body.availableFrom ? new Date(body.availableFrom) : null,
       availableTo: body.availableTo ? new Date(body.availableTo) : null,
       visImages: body.visImages ?? 'verified',
-      visPrice: body.visPrice ?? 'public',
-      visCity: body.visCity ?? 'verified',
       visAddress: body.visAddress ?? 'on_request',
       visContact: body.visContact ?? 'on_request',
       visDates: body.visDates ?? 'verified',
@@ -125,8 +123,6 @@ export async function gigsRoutes(app: FastifyInstance) {
         availableTo: body.availableTo ? new Date(body.availableTo) : null,
       }),
       ...(body.visImages !== undefined && { visImages: body.visImages }),
-      ...(body.visPrice !== undefined && { visPrice: body.visPrice }),
-      ...(body.visCity !== undefined && { visCity: body.visCity }),
       ...(body.visAddress !== undefined && { visAddress: body.visAddress }),
       ...(body.visContact !== undefined && { visContact: body.visContact }),
       ...(body.visDates !== undefined && { visDates: body.visDates }),
@@ -176,6 +172,7 @@ export async function gigsRoutes(app: FastifyInstance) {
     const data = await db.query.gigs.findMany({
       where: eq(gigs.status, 'active'),
       orderBy: [desc(gigs.createdAt)],
+      with: { region: true, city: true },
     });
 
     const viewer = optionalGigViewer(request.headers.authorization);
@@ -183,11 +180,12 @@ export async function gigsRoutes(app: FastifyInstance) {
     return reply.send({ data: data.map((gig) => presentGig(gig, visibility)) });
   });
 
-  app.get('/:id', async (request, reply) => {
+  app.get('/:id', { preHandler: [requireAuth] }, async (request, reply) => {
     const params = request.params as { id: string };
 
     const gig = await db.query.gigs.findFirst({
       where: eq(gigs.id, params.id),
+      with: { region: true, city: true },
     });
 
     if (!gig) {

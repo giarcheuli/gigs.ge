@@ -5,9 +5,11 @@
  *
  * Renders differently based on the viewer:
  *
- *  Visitor / unverified user:
- *    - Sees basic info. Fields hidden based on visibility settings.
- *    - CTA: sign up / verify to apply.
+ * Requires login: logged-out visitors are sent to /login and returned here.
+ *
+ *  Unverified user:
+ *    - Sees the gig. Fields hidden based on the poster's remaining privacy settings.
+ *    - CTA: verify email to apply.
  *
  *  Verified worker (not the poster):
  *    - Sees full visible fields. Apply button (or "Already applied" message).
@@ -24,6 +26,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/lib/auth-context';
 import { apiFetch } from '@/lib/api';
+import { priceLabel as boardPriceLabel } from '@/components/gig-board';
 import { WORKER_FEE_RATE } from '@gigs/shared/constants';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -35,6 +38,8 @@ interface Gig {
   longDescription: string | null;
   regionId: number;
   cityId: number | null;
+  region?: { id: number; nameEn: string } | null;
+  city?: { id: number; nameEn: string } | null;
   streetAddress: string | null;
   priceType: 'fixed' | 'range' | 'negotiable';
   priceFixed: string | null;
@@ -43,8 +48,6 @@ interface Gig {
   availableFrom: string | null;
   availableTo: string | null;
   status: string;
-  visPrice: string;
-  visCity: string;
   visAddress: string;
   visDates: string;
   expiresAt: string;
@@ -60,22 +63,23 @@ interface Application {
   contract?: { id: string } | null;
 }
 
-const REGION_NAMES: Record<number, string> = {
-  1: 'Tbilisi', 2: 'Adjara', 3: 'Guria', 4: 'Imereti',
-  5: 'Kakheti', 6: 'Kvemo Kartli', 7: 'Mtskheta-Mtianeti',
-  8: 'Racha-Lechkhumi', 9: 'Samegrelo-Zemo Svaneti',
-  10: 'Samtskhe-Javakheti', 11: 'Shida Kartli',
-};
+const REGION_FALLBACK = (regionId: number) => `Region ${regionId}`;
 
 // ── Page component ─────────────────────────────────────────────────────────────
 
 export default function GigDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const qc = useQueryClient();
 
   const isVerified = Boolean(user?.emailVerified);
+
+  useEffect(() => {
+    if (!loading && !user) {
+      router.replace(`/login?next=${encodeURIComponent(`/gigs/${params.id}`)}`);
+    }
+  }, [loading, user, router, params.id]);
 
   // ── Fetch gig ──
   const {
@@ -84,6 +88,7 @@ export default function GigDetailPage() {
     isError,
   } = useQuery<Gig>({
     queryKey: ['gig', params.id],
+    enabled: Boolean(user),
     queryFn: async () => {
       const res = await apiFetch(`/gigs/${params.id}`);
       if (!res.ok) throw new Error('Not found');
@@ -168,7 +173,7 @@ export default function GigDetailPage() {
     },
   });
 
-  if (isLoading) {
+  if (loading || !user || isLoading) {
     return (
       <main className="min-h-screen bg-gray-50">
         <Header />
@@ -186,7 +191,7 @@ export default function GigDetailPage() {
         <Header />
         <div className="max-w-2xl mx-auto px-4 py-8 text-center text-gray-500">
           <p className="text-lg font-medium">Gig not found</p>
-          <Link href="/gigs" className="text-brand-600 hover:underline text-sm mt-2 inline-block">
+          <Link href="/" className="text-brand-600 hover:underline text-sm mt-2 inline-block">
             ← Back to board
           </Link>
         </div>
@@ -201,15 +206,8 @@ export default function GigDetailPage() {
     return false;
   };
 
-  const priceLabel = () => {
-    if (gig.priceType === 'negotiable') return '💬 Negotiable — discuss in person';
-    if (!canSeeField(gig.visPrice)) return null; // locked
-    if (gig.priceType === 'fixed' && gig.priceFixed) return `₾ ${gig.priceFixed}`;
-    if (gig.priceType === 'range' && gig.priceRangeMin && gig.priceRangeMax) {
-      return `₾ ${gig.priceRangeMin} – ₾ ${gig.priceRangeMax}`;
-    }
-    return null;
-  };
+  const priceLabel = () =>
+    gig.priceType === 'negotiable' ? '💬 Negotiable — discuss in person' : boardPriceLabel(gig);
 
   const workerFee =
     gig.priceType === 'fixed' && gig.priceFixed
@@ -234,13 +232,9 @@ export default function GigDetailPage() {
           )}
 
           <dl className="grid grid-cols-2 gap-2 text-sm">
-            <Row label="Region" value={REGION_NAMES[gig.regionId] ?? `Region ${gig.regionId}`} />
+            <Row label="Region" value={gig.region?.nameEn ?? REGION_FALLBACK(gig.regionId)} />
 
-            {canSeeField(gig.visCity) && gig.cityId ? (
-              <Row label="City" value={`City #${gig.cityId}`} />
-            ) : !canSeeField(gig.visCity) ? (
-              <Row label="City" value="🔒 Verified users only" muted />
-            ) : null}
+            {gig.city && <Row label="City" value={gig.city.nameEn} />}
 
             {canSeeField(gig.visAddress) && gig.streetAddress ? (
               <Row label="Address" value={gig.streetAddress} />
@@ -261,11 +255,7 @@ export default function GigDetailPage() {
 
           {/* Price */}
           <div className="pt-2 border-t border-gray-100">
-            {priceLabel() ? (
-              <p className="text-lg font-semibold text-brand-700">{priceLabel()}</p>
-            ) : (
-              <p className="text-sm text-gray-400">🔒 Price visible to verified users</p>
-            )}
+            <p className="text-lg font-semibold text-brand-700">{priceLabel()}</p>
             {workerFee && isVerified && !isPoster && (
               <p className="text-xs text-gray-400 mt-1">
                 Service fee upon completion: ₾ {workerFee} (2%)
@@ -351,7 +341,7 @@ export default function GigDetailPage() {
                     </Link>
                   )}
                   <Link
-                    href="/gigs"
+                    href="/"
                     className="block text-sm text-gray-500 hover:text-brand-600"
                   >
                     ← Go back to list of gigs
@@ -402,29 +392,15 @@ export default function GigDetailPage() {
         {/* ── Prompt unverified users ── */}
         {!isPoster && !isVerified && gig.status === 'active' && (
           <section className="bg-white rounded-xl p-6 border border-gray-100 text-center">
-            {!user ? (
-              <>
-                <p className="text-sm text-gray-600 mb-3">Sign in to apply for this gig.</p>
-                <Link
-                  href={`/login?next=/gigs/${gig.id}`}
-                  className="rounded-lg bg-brand-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 transition-colors"
-                >
-                  Sign in
-                </Link>
-              </>
-            ) : (
-              <>
-                <p className="text-sm text-gray-600 mb-3">
-                  Verify your email to apply for gigs. Phone verification is optional.
-                </p>
-                <Link
-                  href={`/verify?next=${encodeURIComponent(`/gigs/${gig.id}`)}`}
-                  className="rounded-lg bg-brand-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 transition-colors"
-                >
-                  Verify email
-                </Link>
-              </>
-            )}
+            <p className="text-sm text-gray-600 mb-3">
+              Verify your email to apply for gigs. Phone verification is optional.
+            </p>
+            <Link
+              href={`/verify?next=${encodeURIComponent(`/gigs/${gig.id}`)}`}
+              className="rounded-lg bg-brand-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 transition-colors"
+            >
+              Verify email
+            </Link>
           </section>
         )}
       </div>
@@ -437,7 +413,7 @@ export default function GigDetailPage() {
 function Header() {
   return (
     <header className="bg-white border-b px-4 py-4">
-      <Link href="/gigs" className="text-gray-500 hover:text-brand-600 text-sm">
+      <Link href="/" className="text-gray-500 hover:text-brand-600 text-sm">
         ← Back to board
       </Link>
     </header>

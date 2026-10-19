@@ -41,8 +41,6 @@ const gigFormSchema = z
     availableFrom: z.string().optional(),
     availableTo: z.string().optional(),
     visImages: z.enum(VIS_OPTS).optional(),
-    visPrice: z.enum(VIS_OPTS).optional(),
-    visCity: z.enum(VIS_OPTS).optional(),
     visAddress: z.enum(VIS_OPTS).optional(),
     visContact: z.enum(VIS_OPTS).optional(),
     visDates: z.enum(VIS_OPTS).optional(),
@@ -94,7 +92,7 @@ export default function EditGigPage() {
         priceType: string; priceFixed: string | null;
         priceRangeMin: string | null; priceRangeMax: string | null;
         availableFrom: string | null; availableTo: string | null;
-        visImages: string; visPrice: string; visCity: string;
+        visImages: string;
         visAddress: string; visContact: string; visDates: string;
       }};
       return body.gig;
@@ -136,8 +134,6 @@ export default function EditGigPage() {
       availableFrom: toDatetimeLocal(gig.availableFrom),
       availableTo: toDatetimeLocal(gig.availableTo),
       visImages: gig.visImages as FormData['visImages'],
-      visPrice: gig.visPrice as FormData['visPrice'],
-      visCity: gig.visCity as FormData['visCity'],
       visAddress: gig.visAddress as FormData['visAddress'],
       visContact: gig.visContact as FormData['visContact'],
       visDates: gig.visDates as FormData['visDates'],
@@ -177,8 +173,6 @@ export default function EditGigPage() {
           availableFrom: data.availableFrom ? new Date(data.availableFrom).toISOString() : undefined,
           availableTo: data.availableTo ? new Date(data.availableTo).toISOString() : undefined,
           visImages: data.visImages,
-          visPrice: data.visPrice,
-          visCity: data.visCity,
           visAddress: data.visAddress,
           visContact: data.visContact,
           visDates: data.visDates,
@@ -425,8 +419,6 @@ export default function EditGigPage() {
 
 const VIS_FIELD_CONFIG = [
   { key: 'visImages', label: 'Images' },
-  { key: 'visPrice', label: 'Price' },
-  { key: 'visCity', label: 'City' },
   { key: 'visAddress', label: 'Street address' },
   { key: 'visContact', label: 'Contact info' },
   { key: 'visDates', label: 'Available dates' },

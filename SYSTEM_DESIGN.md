@@ -629,18 +629,20 @@ Fees below **1.00 GEL** are not invoiced. They carry over to the next month's cy
 
 | Data Point | Visitor | Auth Unverified | Auth Verified | Post-Contract |
 |-----------|---------|-----------------|--------------|---------------|
-| Short description | ✅ | ✅ | ✅ | ✅ |
-| Long description | ❌ | ❌ | ✅ | ✅ |
+| Title / short description | ✅ | ✅ | ✅ | ✅ |
+| Long description | ❌ | ✅ | ✅ | ✅ |
 | Images (preview) | ✅ | ✅ | ✅ | ✅ |
 | Images (full gallery) | ❌ | ❌ | ✅* | ✅ |
-| Price | ✅ | ✅ | ✅* | ✅ |
+| Price | ✅ | ✅ | ✅ | ✅ |
 | Region | ✅ | ✅ | ✅ | ✅ |
-| City | ❌ | ❌ | ✅* | ✅ |
+| City | ✅ | ✅ | ✅ | ✅ |
 | Full address | ❌ | ❌ | on-request* | ✅ |
 | Poster name | ❌ | ❌ | on-request* | ✅ |
 | Contact info | ❌ | ❌ | on-request* | ✅ (active contracts only) |
 
 \* Poster can change default via per-field toggle.
+
+**Product decision 2026-10-20:** price and city are always public so the homepage board is useful to visitors. The `vis_price` and `vis_city` columns are deprecated and ignored. The gig detail page requires login. See [docs/specs/feat-public-gig-board.md](docs/specs/feat-public-gig-board.md).
 
 ### 11.3 Contact Info Sharing
 
