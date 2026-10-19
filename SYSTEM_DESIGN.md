@@ -1070,8 +1070,8 @@ UNIQUE (gig_id, reporter_id)
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| GET | `/gigs` | ❌ | List active gigs (board view) |
-| GET | `/gigs/:id` | ❌ | Single gig (visibility rules) |
+| GET | `/gigs` | ❌ | List active gigs (board view). Query: `regionId`, `cityId`, `priceMin`, `priceMax`, `limit` (1–50, default 20), `cursor`. Newest first; returns `{ data, nextCursor }` |
+| GET | `/gigs/:id` | ✅ | Single gig (visibility rules); login required since 2026-10-20 |
 | POST | `/gigs` | ✅ verified | Create gig |
 | PATCH | `/gigs/:id` | ✅ owner | Update gig |
 | POST | `/gigs/:id/publish` | ✅ owner | Publish draft |

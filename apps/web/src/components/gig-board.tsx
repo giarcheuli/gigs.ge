@@ -3,18 +3,24 @@
 /**
  * Public gig board, rendered on the homepage for everyone.
  *
- * Cards show the short description, location, and price, which are public for every gig.
+ * Cards show title, short description, location, and price, which are public for every gig.
  * Opening a gig requires login, so visitors' card links go straight to /login and return to the gig.
+ * Filters run on the server; pages load as the user scrolls, with a "Load more" button as a fallback.
  */
 
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/lib/auth-context';
 import { apiFetch } from '@/lib/api';
 
 interface Place {
   id: number;
   nameEn: string;
+}
+
+interface Region extends Place {
+  cities: Place[];
 }
 
 export interface BoardGig {
@@ -32,10 +38,24 @@ export interface BoardGig {
   expiresAt: string;
 }
 
+interface BoardPage {
+  data: BoardGig[];
+  nextCursor: string | null;
+}
+
+interface Filters {
+  regionId: string;
+  cityId: string;
+  priceMin: string;
+  priceMax: string;
+}
+
 interface MyApplication {
   gigId: string;
   status: string;
 }
+
+const EMPTY_FILTERS: Filters = { regionId: '', cityId: '', priceMin: '', priceMax: '' };
 
 export function priceLabel(gig: Pick<BoardGig, 'priceType' | 'priceFixed' | 'priceRangeMin' | 'priceRangeMax'>): string {
   if (gig.priceType === 'fixed' && gig.priceFixed) return `₾ ${gig.priceFixed}`;
@@ -57,19 +77,66 @@ function expiryLabel(expiresAt: string): string {
   return `Expires in ${days} days`;
 }
 
+function boardQueryString(filters: Filters, cursor: string | undefined): string {
+  const params = new URLSearchParams();
+  if (filters.regionId) params.set('regionId', filters.regionId);
+  if (filters.cityId) params.set('cityId', filters.cityId);
+  if (filters.priceMin) params.set('priceMin', filters.priceMin);
+  if (filters.priceMax) params.set('priceMax', filters.priceMax);
+  if (cursor) params.set('cursor', cursor);
+  const query = params.toString();
+  return query ? `?${query}` : '';
+}
+
 export function GigBoard() {
   const { user, loading } = useAuth();
   const isVerified = Boolean(user?.emailVerified);
 
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ['gigs', 'active'],
+  const [draft, setDraft] = useState<Filters>(EMPTY_FILTERS);
+  const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+
+  const { data: regions = [] } = useQuery<Region[]>({
+    queryKey: ['regions'],
     queryFn: async () => {
-      const res = await apiFetch('/gigs');
-      if (!res.ok) throw new Error('Failed to load gigs');
-      const body = (await res.json()) as { data: BoardGig[] };
+      const res = await apiFetch('/regions');
+      if (!res.ok) return [];
+      const body = (await res.json()) as { data: Region[] };
       return body.data;
     },
+    staleTime: Infinity,
   });
+
+  const citiesForRegion = regions.find((r) => String(r.id) === draft.regionId)?.cities ?? [];
+  const priceRangeInvalid = Boolean(draft.priceMin && draft.priceMax && Number(draft.priceMin) > Number(draft.priceMax));
+
+  const {
+    data,
+    isLoading,
+    isError,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
+    queryKey: ['gigs', 'active', filters],
+    queryFn: async ({ pageParam }) => {
+      const res = await apiFetch(`/gigs${boardQueryString(filters, pageParam)}`);
+      if (!res.ok) throw new Error('Failed to load gigs');
+      return (await res.json()) as BoardPage;
+    },
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+  });
+
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel || !hasNextPage) return;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0]?.isIntersecting && !isFetchingNextPage) void fetchNextPage();
+    }, { rootMargin: '200px' });
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   const { data: myApplications = [] } = useQuery<MyApplication[]>({
     queryKey: ['my-applications'],
@@ -82,7 +149,19 @@ export function GigBoard() {
     enabled: isVerified,
   });
 
-  const appliedGigIds = new Set(myApplications.map((a) => a.gigId));
+  const appliedGigIds = new Set(myApplications.filter((a) => a.status !== 'withdrawn').map((a) => a.gigId));
+  const gigs = data?.pages.flatMap((page) => page.data) ?? [];
+  const hasActiveFilters = Object.values(filters).some(Boolean);
+
+  function applyFilters(event: React.FormEvent) {
+    event.preventDefault();
+    if (!priceRangeInvalid) setFilters(draft);
+  }
+
+  function clearFilters() {
+    setDraft(EMPTY_FILTERS);
+    setFilters(EMPTY_FILTERS);
+  }
 
   return (
     <main className="min-h-screen bg-gray-50">
@@ -120,9 +199,65 @@ export function GigBoard() {
       <div className="max-w-2xl mx-auto px-4 py-8">
         <h1 className="text-2xl font-bold text-gray-900">Available gigs</h1>
         {!loading && !user && (
-          <p className="mt-1 mb-6 text-sm text-gray-500">Sign in to see full details and apply.</p>
+          <p className="mt-1 text-sm text-gray-500">Sign in to see full details and apply.</p>
         )}
-        {(loading || user) && <div className="mb-6" />}
+
+        <form
+          onSubmit={applyFilters}
+          className="mt-4 mb-6 grid grid-cols-2 gap-2 sm:grid-cols-4 bg-white rounded-xl p-3 border border-gray-100"
+          aria-label="Filter gigs"
+        >
+          <select
+            aria-label="Region"
+            value={draft.regionId}
+            onChange={(e) => setDraft({ ...draft, regionId: e.target.value, cityId: '' })}
+            className="rounded-md border border-gray-300 px-2 py-2 text-sm"
+          >
+            <option value="">All regions</option>
+            {regions.map((r) => <option key={r.id} value={r.id}>{r.nameEn}</option>)}
+          </select>
+          <select
+            aria-label="City"
+            value={draft.cityId}
+            onChange={(e) => setDraft({ ...draft, cityId: e.target.value })}
+            disabled={citiesForRegion.length === 0}
+            className="rounded-md border border-gray-300 px-2 py-2 text-sm disabled:bg-gray-50"
+          >
+            <option value="">All cities</option>
+            {citiesForRegion.map((c) => <option key={c.id} value={c.id}>{c.nameEn}</option>)}
+          </select>
+          <input
+            aria-label="Minimum price"
+            inputMode="numeric"
+            placeholder="Min ₾"
+            value={draft.priceMin}
+            onChange={(e) => setDraft({ ...draft, priceMin: e.target.value.replace(/\D/g, '') })}
+            className="rounded-md border border-gray-300 px-2 py-2 text-sm"
+          />
+          <input
+            aria-label="Maximum price"
+            inputMode="numeric"
+            placeholder="Max ₾"
+            value={draft.priceMax}
+            onChange={(e) => setDraft({ ...draft, priceMax: e.target.value.replace(/\D/g, '') })}
+            className="rounded-md border border-gray-300 px-2 py-2 text-sm"
+          />
+          <div className="col-span-2 sm:col-span-4 flex items-center gap-3">
+            <button
+              type="submit"
+              disabled={priceRangeInvalid}
+              className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60 transition-colors"
+            >
+              Apply filters
+            </button>
+            {(hasActiveFilters || Object.values(draft).some(Boolean)) && (
+              <button type="button" onClick={clearFilters} className="text-sm text-gray-500 hover:text-brand-600">
+                Clear
+              </button>
+            )}
+            {priceRangeInvalid && <span role="alert" className="text-xs text-red-600">Min must be ≤ max</span>}
+          </div>
+        </form>
 
         {isLoading && (
           <div className="space-y-3">
@@ -134,10 +269,12 @@ export function GigBoard() {
 
         {isError && <p className="text-red-600 text-sm">Failed to load gigs. Please refresh.</p>}
 
-        {data && data.length === 0 && (
+        {!isLoading && !isError && gigs.length === 0 && (
           <div className="text-center py-16 text-gray-500">
-            <p className="text-lg font-medium mb-2">No gigs posted yet</p>
-            {isVerified && (
+            <p className="text-lg font-medium mb-2">
+              {hasActiveFilters ? 'No gigs match these filters' : 'No gigs posted yet'}
+            </p>
+            {isVerified && !hasActiveFilters && (
               <Link href="/gigs/new" className="text-brand-600 hover:underline text-sm">
                 Be the first to post one →
               </Link>
@@ -145,9 +282,9 @@ export function GigBoard() {
           </div>
         )}
 
-        {data && data.length > 0 && (
+        {gigs.length > 0 && (
           <div className="space-y-3">
-            {data.map((gig) => (
+            {gigs.map((gig) => (
               <Link
                 key={gig.id}
                 href={user ? `/gigs/${gig.id}` : `/login?next=${encodeURIComponent(`/gigs/${gig.id}`)}`}
@@ -172,6 +309,21 @@ export function GigBoard() {
                 </div>
               </Link>
             ))}
+          </div>
+        )}
+
+        <div ref={sentinelRef} aria-hidden="true" />
+
+        {hasNextPage && (
+          <div className="mt-6 text-center">
+            <button
+              type="button"
+              onClick={() => void fetchNextPage()}
+              disabled={isFetchingNextPage}
+              className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-white disabled:opacity-60"
+            >
+              {isFetchingNextPage ? 'Loading…' : 'Load more'}
+            </button>
           </div>
         )}
       </div>
