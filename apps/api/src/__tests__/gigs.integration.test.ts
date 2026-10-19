@@ -318,4 +318,42 @@ describe('Gigs Routes Integration', () => {
       statusCode: 404,
     });
   });
+
+  it('pages the board with an opaque cursor', async () => {
+    const newer = { ...draftGig, id: '44444444-4444-4444-4444-444444444444', status: 'active', createdAt: new Date('2026-05-03T00:00:00.000Z') };
+    const older = { ...draftGig, id: '55555555-5555-5555-5555-555555555555', status: 'active', createdAt: new Date('2026-05-02T00:00:00.000Z') };
+
+    mockDb.query.gigs.findMany
+      .mockResolvedValueOnce([newer, older])
+      .mockResolvedValueOnce([older]);
+
+    const app = await buildApp();
+    const first = await app.inject({ method: 'GET', url: '/api/v1/gigs?limit=1&regionId=1&priceMin=50&priceMax=200' });
+    const nextCursor = first.json().nextCursor as string;
+    const second = await app.inject({ method: 'GET', url: `/api/v1/gigs?limit=1&cursor=${encodeURIComponent(nextCursor)}` });
+    await app.close();
+
+    expect(first.statusCode).toBe(200);
+    expect(first.json().data.map((gig: { id: string }) => gig.id)).toEqual([newer.id]);
+    expect(typeof nextCursor).toBe('string');
+    expect(mockDb.query.gigs.findMany).toHaveBeenNthCalledWith(1, expect.objectContaining({ limit: 2 }));
+
+    expect(second.statusCode).toBe(200);
+    expect(second.json().data.map((gig: { id: string }) => gig.id)).toEqual([older.id]);
+    expect(second.json().nextCursor).toBeNull();
+  });
+
+  it('rejects invalid board filters and cursors with 400', async () => {
+    const app = await buildApp();
+    const badRegion = await app.inject({ method: 'GET', url: '/api/v1/gigs?regionId=abc' });
+    const badCursor = await app.inject({ method: 'GET', url: '/api/v1/gigs?cursor=not-a-cursor' });
+    const badRange = await app.inject({ method: 'GET', url: '/api/v1/gigs?priceMin=50&priceMax=10' });
+    await app.close();
+
+    expect(badRegion.statusCode).toBe(400);
+    expect(badCursor.statusCode).toBe(400);
+    expect(badCursor.json()).toEqual({ error: 'Invalid cursor', statusCode: 400 });
+    expect(badRange.statusCode).toBe(400);
+    expect(mockDb.query.gigs.findMany).not.toHaveBeenCalled();
+  });
 });
