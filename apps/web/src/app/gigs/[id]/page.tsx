@@ -34,8 +34,10 @@ import { WORKER_FEE_RATE } from '@gigs/shared/constants';
 interface Gig {
   id: string;
   posterId: string;
+  title?: string | null;
   shortDescription: string;
   longDescription: string | null;
+  workersNeeded?: number;
   regionId: number;
   cityId: number | null;
   region?: { id: number; nameEn: string } | null;
@@ -223,9 +225,11 @@ export default function GigDetailPage() {
         {/* Main gig card */}
         <section className="bg-white rounded-xl p-6 border border-gray-100 space-y-4">
           <div className="flex items-start justify-between gap-2">
-            <h1 className="text-xl font-bold text-gray-900">{gig.shortDescription}</h1>
+            <h1 className="text-xl font-bold text-gray-900">{gig.title ?? gig.shortDescription}</h1>
             <StatusBadge status={gig.status} />
           </div>
+
+          {gig.title && <p className="text-gray-800 text-sm font-medium">{gig.shortDescription}</p>}
 
           {gig.longDescription && (
             <p className="text-gray-700 text-sm whitespace-pre-wrap">{gig.longDescription}</p>
@@ -235,6 +239,8 @@ export default function GigDetailPage() {
             <Row label="Region" value={gig.region?.nameEn ?? REGION_FALLBACK(gig.regionId)} />
 
             {gig.city && <Row label="City" value={gig.city.nameEn} />}
+
+            <Row label="Workers needed" value={String(gig.workersNeeded ?? 1)} />
 
             {canSeeField(gig.visAddress) && gig.streetAddress ? (
               <Row label="Address" value={gig.streetAddress} />

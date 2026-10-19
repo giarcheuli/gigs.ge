@@ -61,6 +61,7 @@ export interface UserProfile {
 export interface Gig {
   id: string;
   posterId: string;
+  title: string | null;
   shortDescription: string;
   longDescription: string | null;
   regionId: number;
@@ -72,6 +73,7 @@ export interface Gig {
   priceRangeMax: string | null;
   availableFrom: string | null;
   availableTo: string | null;
+  workersNeeded: number;
   status: GigStatus;
   visImages: VisibilityLevel;
   visAddress: VisibilityLevel;

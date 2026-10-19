@@ -222,16 +222,18 @@
     {
       "task": "Public gig board on the homepage: city and price always public (vis_price/vis_city deprecated), detail page behind login, long description for any logged-in user, region/city names on every gig.",
       "priority": "high",
-      "status": "in_progress",
+      "status": "done",
       "phase": "m1_uat_round1",
-      "notes": "Slice 1 of docs/specs/feat-public-gig-board.md."
+      "completedAt": "2026-10-20",
+      "notes": "Slice 1 of docs/specs/feat-public-gig-board.md (PR #31)."
     },
     {
       "task": "Gig posting fields: required title (max 80 chars), workers needed (default 1, hiring more or fewer allowed), fixed price only until negotiation exists.",
       "priority": "high",
-      "status": "not_started",
+      "status": "done",
       "phase": "m1_uat_round1",
-      "notes": "Slice 2 of docs/specs/feat-public-gig-board.md (D5-D7)."
+      "completedAt": "2026-10-20",
+      "notes": "Slice 2 of docs/specs/feat-public-gig-board.md (D5-D7). Also fixed: request validation errors now return 400 instead of 500 on every route."
     },
     {
       "task": "Board filters (region, city, price range), newest first, and cursor-based 'load more' paging.",

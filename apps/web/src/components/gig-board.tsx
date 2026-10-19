@@ -19,7 +19,9 @@ interface Place {
 
 export interface BoardGig {
   id: string;
+  title?: string | null;
   shortDescription: string;
+  workersNeeded?: number;
   regionId: number;
   region?: Place | null;
   city?: Place | null;
@@ -152,16 +154,20 @@ export function GigBoard() {
                 className="block bg-white rounded-xl p-5 border border-gray-100 hover:border-brand-200 hover:shadow-sm transition-all"
               >
                 <div className="flex items-start justify-between gap-2">
-                  <p className="font-semibold text-gray-900 line-clamp-2">{gig.shortDescription}</p>
+                  <p className="font-semibold text-gray-900 line-clamp-1">{gig.title ?? gig.shortDescription}</p>
                   {appliedGigIds.has(gig.id) && (
                     <span className="shrink-0 rounded-full bg-yellow-100 px-2 py-1 text-xs font-medium text-yellow-700 whitespace-nowrap">
                       ✓ Applied
                     </span>
                   )}
                 </div>
+                {gig.title && (
+                  <p className="mt-1 text-sm text-gray-600 line-clamp-2">{gig.shortDescription}</p>
+                )}
                 <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-gray-500">
                   <span>📍 {locationLabel(gig)}</span>
                   <span className="font-medium text-brand-700">{priceLabel(gig)}</span>
+                  {(gig.workersNeeded ?? 1) > 1 && <span>👥 {gig.workersNeeded} workers</span>}
                   <span className="ml-auto text-xs">{expiryLabel(gig.expiresAt)}</span>
                 </div>
               </Link>

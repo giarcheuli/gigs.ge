@@ -16,29 +16,13 @@ type GigPricingInput = {
 };
 
 function validatePricing(pricing: GigPricingInput): string | null {
-  if (pricing.priceType === 'fixed') {
-    if (!pricing.priceFixed || pricing.priceRangeMin || pricing.priceRangeMax) {
-      return 'Fixed price gigs require priceFixed and cannot include price ranges';
-    }
-    return null;
+  // Range and negotiable prices return once negotiation is designed (spec feat-public-gig-board D7).
+  if (pricing.priceType !== 'fixed') {
+    return 'Only fixed-price gigs can be posted for now';
   }
-
-  if (pricing.priceType === 'range') {
-    if (!pricing.priceRangeMin || !pricing.priceRangeMax || pricing.priceFixed) {
-      return 'Range price gigs require priceRangeMin and priceRangeMax and cannot include priceFixed';
-    }
-
-    if (Number(pricing.priceRangeMin) > Number(pricing.priceRangeMax)) {
-      return 'priceRangeMin must be less than or equal to priceRangeMax';
-    }
-
-    return null;
+  if (!pricing.priceFixed || pricing.priceRangeMin || pricing.priceRangeMax) {
+    return 'Fixed price gigs require priceFixed and cannot include price ranges';
   }
-
-  if (pricing.priceFixed || pricing.priceRangeMin || pricing.priceRangeMax) {
-    return 'Negotiable gigs cannot include fixed or range prices';
-  }
-
   return null;
 }
 
@@ -53,6 +37,7 @@ export async function gigsRoutes(app: FastifyInstance) {
 
     const [gig] = await db.insert(gigs).values({
       posterId: request.user.sub,
+      title: body.title,
       shortDescription: body.shortDescription,
       longDescription: body.longDescription ?? null,
       regionId: body.regionId,
@@ -64,6 +49,7 @@ export async function gigsRoutes(app: FastifyInstance) {
       priceRangeMax: body.priceRangeMax ?? null,
       availableFrom: body.availableFrom ? new Date(body.availableFrom) : null,
       availableTo: body.availableTo ? new Date(body.availableTo) : null,
+      workersNeeded: body.workersNeeded ?? 1,
       visImages: body.visImages ?? 'verified',
       visAddress: body.visAddress ?? 'on_request',
       visContact: body.visContact ?? 'on_request',
@@ -107,6 +93,7 @@ export async function gigsRoutes(app: FastifyInstance) {
     }
 
     const [gig] = await db.update(gigs).set({
+      ...(body.title !== undefined && { title: body.title }),
       ...(body.shortDescription !== undefined && { shortDescription: body.shortDescription }),
       ...(body.longDescription !== undefined && { longDescription: body.longDescription ?? null }),
       ...(body.regionId !== undefined && { regionId: body.regionId }),
@@ -122,6 +109,7 @@ export async function gigsRoutes(app: FastifyInstance) {
       ...(body.availableTo !== undefined && {
         availableTo: body.availableTo ? new Date(body.availableTo) : null,
       }),
+      ...(body.workersNeeded !== undefined && { workersNeeded: body.workersNeeded }),
       ...(body.visImages !== undefined && { visImages: body.visImages }),
       ...(body.visAddress !== undefined && { visAddress: body.visAddress }),
       ...(body.visContact !== undefined && { visContact: body.visContact }),
