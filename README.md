@@ -2,6 +2,12 @@
 
 A minimalistic, mobile-first gig board for Georgia — post short-term jobs or apply for them.
 
+## Portfolio entry
+
+A personal project for demonstrating business analysis, technical documentation, and AI-assisted delivery. My focus is requirements, product decisions, acceptance criteria, and validation; implementation is AI-assisted. This is separate from employer deliverables.
+
+Read the [gig-photo case study](./docs/guides/portfolio-gig-photos.md) for a requirement-to-test walkthrough. The [UAT environment](https://uat.gigs.ge) is a testing environment, not a production-service claim. No new live functional test was performed for this documentation update.
+
 ## Documentation
 
 - [**Documentation Index**](./docs/README.md): where every doc lives and where new ones go. Start here.
@@ -22,6 +28,8 @@ A minimalistic, mobile-first gig board for Georgia — post short-term jobs or a
 
 ## Status
 
-Live on two environments: **dev** (https://dev.gigs.ge, from branch `dev`) and **UAT** (https://uat.gigs.ge, from branch `main`). Testers can register with real email verification, post and apply to gigs, sign contracts, and cancel by mutual agreement. Contract timers, disputes/arbitration, billing, uploads, and the admin app are not built yet. See the [UAT Readiness Handoff](./docs/guides/uat-readiness-handoff.md) for details and the [Improvement Plan](./docs/planning/improvement-plan.md) for what comes next.
+Live on two environments: **dev** (https://dev.gigs.ge, from branch `dev`) and **UAT** (https://uat.gigs.ge, from branch `main`). Testers can register with real email verification, post and apply to gigs, sign contracts, and cancel by mutual agreement. Contract timers, disputes/arbitration, billing, avatars/application attachments/dispute-evidence uploads, and the admin app are not built yet. See the [UAT Readiness Handoff](./docs/guides/uat-readiness-handoff.md) for details and the [Improvement Plan](./docs/planning/improvement-plan.md) for what comes next.
+
+Gig photos are implemented: posters can add up to 10, remove them, and select a cover. See the [photo spec](./docs/specs/feat-gig-photos.md). [CI](./.github/workflows/ci.yml) runs API typechecking/tests and app builds on PRs. Dated files under `docs/status/` are historical snapshots; the UAT handoff is the current product entry point.
 
 Workflow: branch from `dev`, merge back to `dev` by PR, verify on dev.gigs.ge, then promote `dev` → `main`. See [docs/guides/branching-and-sdlc.md](./docs/guides/branching-and-sdlc.md).
