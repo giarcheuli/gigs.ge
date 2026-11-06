@@ -12,6 +12,10 @@ Start here. Each folder has one job, so you can tell from the path whether a fil
 | [status/](./status/) | Dated snapshots of project state (one per review or promotion) | [2026-10-19-project-status.md](./status/2026-10-19-project-status.md) |
 | [archive/](./archive/) | Historical documents kept for context, not for instructions | [README.md](./archive/README.md) |
 
+Portfolio walkthrough: [Gig photos — requirements, decisions, and verification](./guides/portfolio-gig-photos.md).
+
+Dated status files preserve history; use the [UAT handoff](./guides/uat-readiness-handoff.md) for current product scope and [CI policy](./guides/sdlc-and-cicd.md) for current checks.
+
 Top-level files:
 
 - [backlog.json](./backlog.json): the backlog of record (milestones, tasks, status).
